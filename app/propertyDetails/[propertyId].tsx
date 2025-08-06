@@ -5,15 +5,17 @@ import {
   ActivityIndicator,
   Alert,
   Button,
-  Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { useSelector } from "react-redux";
 import {
   DOOR_INSPECTION_API,
@@ -23,7 +25,6 @@ import {
   GET_PROPERTY_USER_MAPPING,
   UPDATE_PROPERTY_USER_MAPPING_STATUS,
 } from "../../components/api/apiPath";
-
 import http from "../../components/api/server";
 import DataGridTable from "../../components/common/DataGridTable"; // adjust path if needed
 import Footer from "../../components/common/Footer";
@@ -40,6 +41,8 @@ const PropertyDetailsScreen = () => {
   const navigation = useNavigation();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 4;
+
+  const [showLoader, setShowLoader] = useState(false);
 
   //   const { propertyId } = route.params as { propertyId: string };
 
@@ -151,21 +154,70 @@ const PropertyDetailsScreen = () => {
     }
   };
 
-  const handleDownload = async () => {
-    try {
-      const res = await http.get(DOOR_INSPECTION_API, {
-        params: { propertyId },
-        responseType: "blob",
-      });
+  
+// const handleDownload = async () => {
+//   setShowLoader(true); // Show loader
+//   try {
+//     const res = await http.get(DOOR_INSPECTION_API, {
+//       params: { propertyId },
+//       responseType: "blob",
+//     });
 
-      const file = new Blob([res.data], { type: "application/pdf" });
-      const fileURL = URL.createObjectURL(file);
-      Linking.openURL(fileURL);
-    } catch (err) {
-      Alert.alert("Error", "Failed to download PDF");
+//     const file = new Blob([res.data], { type: "application/pdf" });
+//     const fileURL = URL.createObjectURL(file);
+//     Linking.openURL(fileURL); // Open in browser or PDF viewer
+//   } catch (err) {
+//     Alert.alert("Error", "Failed to download PDF");
+//   } finally {
+//     setShowLoader(false); // Hide loader after completion
+//   }
+// };
+
+const handleDownload = async () => {
+  setShowLoader(true);
+  try {
+    const res = await http.get(DOOR_INSPECTION_API, {
+      params: { propertyId },
+      responseType: "blob",
+    });
+
+    const file = new Blob([res.data], { type: "application/pdf" });
+    const fileURL = URL.createObjectURL(file);
+
+    if (Platform.OS === "web") {
+      const link = document.createElement("a");
+      link.href = fileURL;
+      link.download = `${propertyId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      const path = `${FileSystem.documentDirectory}${propertyId}.pdf`;
+      const reader = new FileReader();
+
+      reader.onload = async () => {
+        if (typeof reader.result === "string") {
+          const base64 = reader.result.split(",")[1];
+          if (base64) {
+            await FileSystem.writeAsStringAsync(path, base64, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            await Sharing.shareAsync(path);
+          }
+        } else {
+          console.error("Expected base64 string, got ArrayBuffer");
+        }
+      };
+
+      reader.readAsDataURL(file);
     }
-  };
-
+  } catch (err) {
+    console.error("Download error", err);
+    Alert.alert("Error", "Failed to download PDF");
+  } finally {
+    setShowLoader(false);
+  }
+};
   if (loading)
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
 
@@ -228,33 +280,41 @@ const PropertyDetailsScreen = () => {
         )} */}
 
             {(userRole === UserRoles.ADMIN ||
-              userRole === UserRoles.APPROVER) &&
-              propertyInfo?.status === Statuses.COMPLETED && (
-                <TouchableOpacity
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "flex-end",
-                    alignItems: "flex-end",
-                    backgroundColor: "#ffffff",
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 6,
-                    marginTop: 10,
-                    marginBottom: 10,
-                  }}
-                  onPress={handleDownload}
-                >
-                  <Icon
-                    name="download"
-                    size={20}
-                    color="blue"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ color: "blue", fontSize: 16 }}>
-                    Download Report
-                  </Text>
-                </TouchableOpacity>
-              )}
+  userRole === UserRoles.APPROVER) &&
+  propertyInfo?.status === Statuses.COMPLETED && (
+    <TouchableOpacity
+      style={{
+        flexDirection: "row",
+        justifyContent: "flex-end",
+        alignItems: "center",
+        backgroundColor: "#ffffff",
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 6,
+        marginTop: 10,
+        marginBottom: 10,
+      }}
+      onPress={handleDownload}
+      disabled={showLoader}
+    >
+      {showLoader ? (
+        <ActivityIndicator size="small" color="blue" />
+      ) : (
+        <>
+          <Icon
+            name="download"
+            size={20}
+            color="blue"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={{ color: "blue", fontSize: 16 }}>
+            Download Report
+          </Text>
+        </>
+      )}
+    </TouchableOpacity>
+)}
+
           </View>
           <ScrollView style={styles.container}>
             <View style={styles.card}>

@@ -6,7 +6,8 @@ import {
 } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { isMobile } from "react-device-detect";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { useSelector } from "react-redux";
 import { DOOR_INSPECTION_API, GET_PROPERTY_USER_MAPPING } from "../api/apiPath";
 import http from "../api/server";
@@ -45,6 +46,7 @@ const {
   status,
   totalAttention,
 } = data;
+const propertyId: string | number = propertyMasterId;
 
 
 useEffect(() => {
@@ -321,12 +323,20 @@ useEffect(() => {
                   </TouchableOpacity>
                 )}
 
-                {/* <TouchableOpacity
-                  onPress={() => handleDownloadClick(propertyInfo?.propertyId)}
-                >
-                  <Icon name="download" size={20} color="black" />
-              
-                </TouchableOpacity> */}
+               {showDownloadIcon && (
+  <TouchableOpacity
+    onPress={() => handleDownloadClick(propertyId)}
+    disabled={showLoader}
+    style={{ marginLeft: 10 }}
+  >
+    {showLoader ? (
+      <ActivityIndicator size="small" color="black" />
+    ) : (
+      <Icon name="download" size={20} color="black" />
+    )}
+  </TouchableOpacity>
+)}
+
               </View>
             </View>
           </View>
