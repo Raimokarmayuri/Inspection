@@ -1,0 +1,76 @@
+/* SignIn.css */
+
+.container {
+  width: 90%;
+  max-width: 400px;
+  margin: 60px auto;
+  padding: 30px 20px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+  font-family: 'Segoe UI', sans-serif;
+  text-align: center;
+}
+
+h2 {
+  font-size: 28px;
+  color: #034694;
+  margin-bottom: 20px;
+}
+
+h3 {
+  font-size: 20px;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+input[type="email"],
+input[type="password"] {
+  width: 100%;
+  padding: 12px 10px;
+  margin: 10px 0 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+  background-color: #f9f9f9;
+}
+
+input:focus {
+  border-color: #034694;
+  outline: none;
+}
+
+.signin-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: #034694;
+  color: #ffffff;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.signin-btn:hover {
+  background-color: #023364;
+}
+
+@media (max-width: 500px) {
+  .container {
+    padding: 20px 15px;
+  }
+
+  h2 {
+    font-size: 24px;
+  }
+
+  h3 {
+    font-size: 18px;
+  }
+
+  .signin-btn {
+    font-size: 0.95rem;
+    padding: 10px;
+  }
+}
