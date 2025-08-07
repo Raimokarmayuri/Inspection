@@ -810,11 +810,11 @@ const Dashboard = () => {
       const nowIso = new Date().toISOString();
 
       const doorImgArr = formData.doorPhoto;
-const doorImgObj = {
-  additionalProp1: doorImgArr[0] || "",
-  additionalProp2: doorImgArr[1] || "",
-  additionalProp3: doorImgArr[2] || "",
-};
+      const doorImgObj = {
+        additionalProp1: doorImgArr[0] || "",
+        additionalProp2: doorImgArr[1] || "",
+        additionalProp3: doorImgArr[2] || "",
+      };
 
       const PropertyInfo = {
         propertyMasterId: propertyMasterId,
@@ -852,8 +852,8 @@ const doorImgObj = {
         propertyName: basicInfo.buildingName || "",
         otherDoorTypeName: formData.doorOther || "",
         doorLocation: basicInfo.location || "",
-       
-        doorPhoto: doorImgObj
+
+        doorPhoto: doorImgObj,
       };
 
       const complianceKeys = [
@@ -939,8 +939,7 @@ const doorImgObj = {
         };
       });
 
-
-     PhysicalMeasurement["comments"] = basicInfo.comments || "";
+      PhysicalMeasurement["comments"] = basicInfo.comments || "";
 
       // const AdditionalInfos = [
       //   { imagePath: basicInfo.floorPlan[0] ? [basicInfo.floorPlan[0]] : [] },
@@ -1101,11 +1100,32 @@ const doorImgObj = {
           />
 
           <Text style={styles.label}>Door Type*</Text>
-          <View style={styles.pickerWrapper}>
+          <View style={{
+              borderWidth: 1,
+              borderColor: "#ccc",
+              borderRadius: 6,
+              backgroundColor: "#e9f1fb",
+              overflow: "hidden",
+              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
+              justifyContent: "center",
+              marginTop: 8,
+            }}>
             <Picker
               selectedValue={formData.doorType}
               onValueChange={(value) => handleFormDataChange("doorType", value)}
-              style={styles.picker}
+              // enabled={!isView} // Disable in view mode
+              dropdownIconColor="#034694"
+              style={{
+                width: "100%",
+                backgroundColor: "#e9f1fb",
+                color: "#034694",
+                fontSize: 16,
+              }}
+              itemStyle={{
+                fontSize: 16,
+                color: "#034694", // Color of items when opened (mostly affects iOS)
+              }}
+              mode="dropdown" // or "dialog" on Android
             >
               <Picker.Item label="Select" value="" />
               {doorOptions.map((opt) => (
@@ -1117,6 +1137,47 @@ const doorImgObj = {
               ))}
             </Picker>
           </View>
+
+          {/* <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#ccc",
+              borderRadius: 6,
+              backgroundColor: "#e9f1fb",
+              overflow: "hidden",
+              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
+              justifyContent: "center",
+              marginTop: 8,
+            }}
+          >
+            <Picker
+              selectedValue={formData.doorType}
+              onValueChange={(value) => handleFormDataChange("doorType", value)}
+              // enabled={!isView} // Disable in view mode
+              dropdownIconColor="#034694"
+              style={{
+                width: "100%",
+                backgroundColor: "#e9f1fb",
+                color: "#034694",
+                fontSize: 16,
+              }}
+              itemStyle={{
+                fontSize: 16,
+                color: "#034694", // Color of items when opened (mostly affects iOS)
+              }}
+              mode="dropdown" // or "dialog" on Android
+            >
+              <Picker.Item label="Select" value="" color="#999" />
+              {doorOptions.map((type) => (
+                <Picker.Item
+                  key={type.doorTypeId}
+                  label={type.doorTypeName}
+                  value={String(type.doorTypeId)}
+                  color="#034694"
+                />
+              ))}
+            </Picker>
+          </View> */}
 
           {doorOtherFlag && (
             <>
@@ -1208,21 +1269,41 @@ const doorImgObj = {
         </View>
 
         <Text style={styles.label}>Fire Rating and Certification*</Text>
-        <View style={styles.pickerWrapper}>
-          <Picker
-            selectedValue={formData.fireResistance}
-            onValueChange={(value) => handleFireResistanceChange(value)}
-            style={styles.picker}
+        <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#ccc",
+              borderRadius: 6,
+              backgroundColor: "#e9f1fb",
+              overflow: "hidden",
+              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
+              justifyContent: "center",
+              marginTop: 8,
+            }}
           >
-            <Picker.Item label="Select" value="" />
-            <Picker.Item label="FD30" value="1" />
-            <Picker.Item label="FD60" value="2" />
-            <Picker.Item label="FD90" value="3" />
-            <Picker.Item label="FD120" value="4" />
-            <Picker.Item label="FD30S" value="5" />
-            <Picker.Item label="FD60S" value="6" />
-            <Picker.Item label="FD90S" value="7" />
-            <Picker.Item label="FD120S" value="8" />
+          <Picker
+            selectedValue={String(formData?.fireResistance ?? "")} // ✅ force string
+            onValueChange={(value) =>
+              handleFormDataChange("fireResistance", value)
+            }
+            // enabled={!isView}
+            dropdownIconColor="#034694"
+            style={{
+              width: "100%",
+              backgroundColor: "#e9f1fb",
+              color: "#034694",
+              fontSize: 16,
+            }}
+          >
+            <Picker.Item label="Select" value="" color="#999" />
+            <Picker.Item label="FD30" value="1" color="#034694" />
+            <Picker.Item label="FD60" value="2" color="#034694" />
+            <Picker.Item label="FD90" value="3" color="#034694" />
+            <Picker.Item label="FD120" value="4" color="#034694" />
+            <Picker.Item label="FD30S" value="5" color="#034694" />
+            <Picker.Item label="FD60S" value="6" color="#034694" />
+            <Picker.Item label="FD90S" value="7" color="#034694" />
+            <Picker.Item label="FD120S" value="8" color="#034694" />
           </Picker>
         </View>
         {/* Physical Measurements Section */}
@@ -1300,21 +1381,39 @@ const doorImgObj = {
 
             {/* 👇 Add hingeLocation Picker just after 'head' field */}
             {key === "head" && (
-              <View style={styles.inputWrapper}>
+              <View>
                 <Text style={styles.label}>
                   Hinge Location <Text style={{ color: "red" }}>*</Text>
                 </Text>
-                <View style={styles.pickerWrapper}>
+                 <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#ccc",
+              borderRadius: 6,
+              backgroundColor: "#e9f1fb",
+              overflow: "hidden",
+              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
+              justifyContent: "center",
+              marginTop: 8,
+            }}
+          >
                   <Picker
-                    selectedValue={formData.hingeLocation}
+                    selectedValue={formData?.hingeLocation ?? ""}
                     onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, hingeLocation: value }))
+                      handleFormDataChange("hingeLocation", value)
                     }
-                    style={styles.picker}
+                    // enabled={!isView}
+                    dropdownIconColor="#034694"
+                    style={{
+                      color: "#034694", // ✅ Text color
+                      fontSize: 16,
+                      width: "100%",
+                      backgroundColor: "#e9f1fb",
+                    }}
                   >
-                    <Picker.Item label="Select" value="Select" />
-                    <Picker.Item label="Left" value="1" />
-                    <Picker.Item label="Right" value="2" />
+                    <Picker.Item label="Select" value="" color="#999" />
+                    <Picker.Item label="Left" value="1" color="#034694" />
+                    <Picker.Item label="Right" value="2" color="#034694" />
                   </Picker>
                 </View>
               </View>
@@ -1585,9 +1684,21 @@ const styles = StyleSheet.create({
   inputWrapper: {
     marginBottom: 12,
   },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    backgroundColor: "#e9f1fb",
+    overflow: "hidden",
+    height: Platform.OS === "ios" ? 200 : 48, // iOS needs height
+    justifyContent: "center",
+    marginTop: 8,
+  },
   picker: {
-    height: 18,
-    paddingHorizontal: 10,
+    width: "100%",
+    backgroundColor: "#e9f1fb",
+    color: "#034694",
+    fontSize: 16,
   },
   switchRow: {
     flexDirection: "row",

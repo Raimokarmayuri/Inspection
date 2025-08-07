@@ -12,8 +12,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to take photos.",
-        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload images."
-      }
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload images.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.mraimokar.inspection"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,6 +23,10 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
@@ -45,8 +51,7 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-font",
-      "expo-barcode-scanner"
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
@@ -56,6 +61,12 @@
       "eas": {
         "projectId": "7f6636d0-c8ba-4c8a-b7bb-b93613e3d83f"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7f6636d0-c8ba-4c8a-b7bb-b93613e3d83f"
     }
   }
 }

@@ -68,7 +68,7 @@ const LoginScreen = () => {
     //   resizeMode="cover"
     // >
     <SafeAreaView style={loginStyles.background}>
-      <View style={loginStyles.overlay} />
+      <View />
       <KeyboardAvoidingView
         style={loginStyles.content}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -131,14 +131,14 @@ const LoginScreen = () => {
           <View style={loginStyles.row}>
             <TouchableOpacity
               onPress={() => setRememberMe(!rememberMe)}
-              style={loginStyles.checkboxContainer}
+              // style={loginStyles.checkboxContainer}
             >
               <Ionicons
                 name={rememberMe ? "checkbox" : "square-outline"}
                 size={24}
                 color="#F8B133"
               />
-              <Text style={loginStyles.checkboxLabel}>Remember me</Text>
+              <Text>Remember me</Text>
             </TouchableOpacity>
             {/* <TouchableOpacity
               onPress={() => navigation.navigate("ResetPassword")}

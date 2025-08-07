@@ -1,6 +1,7 @@
 import { Picker } from "@react-native-picker/picker";
 
-import React from "react";
+import { useNavigation } from "expo-router";
+import React, { useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   Switch,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import Footer from "../common/Footer";
@@ -63,6 +65,8 @@ interface FormProps {
   generateQRCode: () => void;
   setShowScanQRCode: (show: boolean) => void;
   handleCancel: () => void;
+  handleSubmit: (status?: string) => Promise<void>;
+
   handleValidationOnSave: (status: string) => void;
 }
 
@@ -95,10 +99,14 @@ const FormComponent: React.FC<FormProps> = ({
   generateQRCode,
   setShowScanQRCode,
   handleCancel,
+  handleSubmit,
   handleValidationOnSave,
 }) => {
+  const navigation = useNavigation();
+  const [submitting, setSubmitting] = useState(false);
+
   return (
-    <SafeAreaView >
+    <SafeAreaView>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Basic Information</Text>
@@ -211,20 +219,18 @@ const FormComponent: React.FC<FormProps> = ({
             </>
           )}
 
-
           <View className="d-flex gap-3 flex-wrap" style={styles.imageSection}>
-
-          <Text style={styles.label}>Door Photo</Text>
-          <Capture
-            isView={isView}
-            savedImages={formData.doorPhoto}
-            onImagesChange={(images) => handleImagesChange(images, "Door")}
-            reset={resetCaptureFlag}
-            onImageDelete={(index) => handleDeleteImages(index, "Door")}
-            mandatoryFieldRef={mandatoryFieldRef}
-            fieldValue={"doorFile"}
-            singleImageCapture
-          />
+            <Text style={styles.label}>Door Photo</Text>
+            <Capture
+              isView={isView}
+              savedImages={formData.doorPhoto}
+              onImagesChange={(images) => handleImagesChange(images, "Door")}
+              reset={resetCaptureFlag}
+              onImageDelete={(index) => handleDeleteImages(index, "Door")}
+              mandatoryFieldRef={mandatoryFieldRef}
+              fieldValue={"doorFile"}
+              singleImageCapture
+            />
           </View>
           {/* 🔥 Fire Rating and Certification */}
           <View style={{ marginBottom: 12 }}>
@@ -523,18 +529,19 @@ const FormComponent: React.FC<FormProps> = ({
 
           <View className="d-flex gap-3 flex-wrap" style={styles.imageSection}>
             <Text style={styles.label}>Additional Photos</Text>
-           <Capture
-  isView={isView}
-  savedImages={basicFormData.additionalPhotos}
-  onImagesChange={(images) => handleImagesChange(images, "Additional")}
-  reset={resetCaptureFlag}
-  onImageDelete={(index) => handleDeleteImages(index, "Additional")}
-  mandatoryFieldRef={mandatoryFieldRef}
-  fieldValue={"additionalPhotos"}
-  singleImageCapture={false} // Allow multiple images
-/>
+            <Capture
+              isView={isView}
+              savedImages={basicFormData.additionalPhotos}
+              onImagesChange={(images) =>
+                handleImagesChange(images, "Additional")
+              }
+              reset={resetCaptureFlag}
+              onImageDelete={(index) => handleDeleteImages(index, "Additional")}
+              mandatoryFieldRef={mandatoryFieldRef}
+              fieldValue={"additionalPhotos"}
+              singleImageCapture={false} // Allow multiple images
+            />
           </View>
-
 
           {/* Additional Comments */}
           <View
@@ -571,6 +578,48 @@ const FormComponent: React.FC<FormProps> = ({
               />
             </View>
           </View>
+          {!isView && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                padding: 20,
+                marginTop: 20,
+              }}
+            >
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#ccc",
+                  paddingVertical: 12,
+                  paddingHorizontal: 25,
+                  borderRadius: 8,
+                }}
+                onPress={() => navigation.goBack()}
+              >
+                <Text style={{ color: "#000", fontWeight: "bold" }}>
+                  ← Back
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#034694",
+                  paddingVertical: 12,
+                  paddingHorizontal: 25,
+                  borderRadius: 8,
+                }}
+                onPress={() => {
+                  console.log("🟢 Submit Clicked");
+                  handleSubmit("Compliant");
+                }}
+                disabled={submitting}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  {submitting ? "Submitting..." : "Submit"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Add additional compliance fields similarly */}
         </View>

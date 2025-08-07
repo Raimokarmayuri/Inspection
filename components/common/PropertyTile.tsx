@@ -6,14 +6,19 @@ import {
 } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { isMobile } from "react-device-detect";
-import { ActivityIndicator, Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useSelector } from "react-redux";
 import { DOOR_INSPECTION_API, GET_PROPERTY_USER_MAPPING } from "../api/apiPath";
 import http from "../api/server";
 import { Statuses, UserRoles } from "./constants";
-
-
 
 interface PropertyTileProps {
   data: any;
@@ -31,78 +36,70 @@ const PropertyTile: React.FC<PropertyTileProps> = ({
   onStartSurvey,
 }) => {
   const [showLoader, setShowLoader] = useState(false);
-const [showNewSurveyIcon, setShowNewSurveyIcon] = useState(false);
+  const [showNewSurveyIcon, setShowNewSurveyIcon] = useState(false);
   const [showDownloadIcon, setShowDownloadIcon] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const { userObj } = useSelector((state: any) => state.user);
-const {
-  propertyMasterId,
-  propertyName,
-  propertyLocation,
-  inspectedBy,
-  lastInspectionDate,
-  nextInspectionDueDate,
-  status,
-  totalAttention,
-} = data;
-const propertyId: string | number = propertyMasterId;
+  const {
+    propertyMasterId,
+    propertyName,
+    propertyLocation,
+    inspectedBy,
+    lastInspectionDate,
+    nextInspectionDueDate,
+    status,
+    totalAttention,
+  } = data;
+  const propertyId: string | number = propertyMasterId;
 
+  useEffect(() => {
+    if (!userObj || !propertyMasterId) return;
 
-useEffect(() => {
-  if (!userObj || !propertyMasterId) return;
+    const getPropertyUserMapping = async () => {
+      try {
+        const propInfoResp = await http.get(
+          GET_PROPERTY_USER_MAPPING + propertyMasterId
+        );
 
-  const getPropertyUserMapping = async () => {
-  try {
-    const propInfoResp = await http.get(
-      GET_PROPERTY_USER_MAPPING + propertyMasterId
-    );
+        if (!propInfoResp?.status || !propInfoResp?.data) return;
 
-    if (!propInfoResp?.status || !propInfoResp?.data) return;
+        const inspectorInspectionStatus = propInfoResp.data.find(
+          (d: any) => d.userId === userObj.userId
+        )?.status;
 
-    const inspectorInspectionStatus =
-      propInfoResp.data.find((d: any) => d.userId === userObj.userId)?.status;
+        const now = new Date();
+        const nextDue = new Date(nextInspectionDueDate);
 
-    const now = new Date();
-    const nextDue = new Date(nextInspectionDueDate);
+        const isInspector = userRole === UserRoles.INSPECTOR;
+        const isApprover = userRole === UserRoles.APPROVER;
+        const isAdmin = userRole === UserRoles.ADMIN;
 
-    const isInspector = userRole === UserRoles.INSPECTOR;
-    const isApprover = userRole === UserRoles.APPROVER;
-    const isAdmin = userRole === UserRoles.ADMIN;
+        if (
+          isInspector &&
+          ((status !== Statuses.COMPLETED &&
+            status !== Statuses.REJECTED &&
+            status !== Statuses.SUBMITTEDFORAPPROVAL &&
+            inspectorInspectionStatus !== Statuses.COMPLETED) ||
+            (nextDue <= now && nextDue.getFullYear() > now.getFullYear() - 1))
+        ) {
+          setShowNewSurveyIcon(true);
+        } else {
+          setShowNewSurveyIcon(false);
+        }
 
-    if (
-      isInspector &&
-      (
-        (
-          status !== Statuses.COMPLETED &&
-          status !== Statuses.REJECTED &&
-          status !== Statuses.SUBMITTEDFORAPPROVAL &&
-          inspectorInspectionStatus !== Statuses.COMPLETED
-        ) ||
-        (
-          nextDue <= now &&
-          nextDue.getFullYear() > now.getFullYear() - 1
-        )
-      )
-    ) {
-      setShowNewSurveyIcon(true);
-    } else {
-      setShowNewSurveyIcon(false);
-    }
+        if (status === Statuses.COMPLETED && (isApprover || isAdmin)) {
+          setShowDownloadIcon(true);
+        } else {
+          setShowDownloadIcon(false);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user mapping:", err);
+      }
+    };
 
-    if (status === Statuses.COMPLETED && (isApprover || isAdmin)) {
-      setShowDownloadIcon(true);
-    } else {
-      setShowDownloadIcon(false);
-    }
-  } catch (err) {
-    console.error("Failed to fetch user mapping:", err);
-  }
-};
-
-  getPropertyUserMapping();
-}, [userObj, propertyMasterId, nextInspectionDueDate, status, userRole]);
-
+    getPropertyUserMapping();
+  }, [userObj, propertyMasterId, nextInspectionDueDate, status, userRole]);
 
   const handleDownloadClick = async (propertyId: string | number) => {
     setShowLoader(true);
@@ -133,8 +130,6 @@ useEffect(() => {
       setShowLoader(false);
     }
   };
-
- 
 
   // useEffect(() => {
   //   if (!userObj) return;
@@ -217,7 +212,7 @@ useEffect(() => {
     switch (status) {
       case "In Review":
         return "50%";
-        case "In Progress":
+      case "In Progress":
         return "50%";
       case "Submitted for Approval":
         return "75%";
@@ -230,8 +225,6 @@ useEffect(() => {
         return "0%";
     }
   };
-
-
 
   return (
     <View style={styles.cardWithLine}>
@@ -283,9 +276,9 @@ useEffect(() => {
                             backgroundColor:
                               status === "Completed"
                                 ? "green"
-                                // : status === "In Review"
+                                : // : status === "In Review"
                                 // ? "#f0ad4e" // orange
-                                 : status === "In Progress"
+                                status === "In Progress"
                                 ? "#f0ad4e" // orange
                                 : status === "Submitted for Approval"
                                 ? "#007bff" // blue
@@ -321,22 +314,21 @@ useEffect(() => {
                   >
                     <Ionicons name="add-circle" size={24} color="blue" />
                   </TouchableOpacity>
+                 )} 
+
+                {showDownloadIcon && (
+                  <TouchableOpacity
+                    onPress={() => handleDownloadClick(propertyId)}
+                    disabled={showLoader}
+                    style={{ marginLeft: 10 }}
+                  >
+                    {showLoader ? (
+                      <ActivityIndicator size="small" color="black" />
+                    ) : (
+                      <Icon name="download" size={20} color="black" />
+                    )}
+                  </TouchableOpacity>
                 )}
-
-               {showDownloadIcon && (
-  <TouchableOpacity
-    onPress={() => handleDownloadClick(propertyId)}
-    disabled={showLoader}
-    style={{ marginLeft: 10 }}
-  >
-    {showLoader ? (
-      <ActivityIndicator size="small" color="black" />
-    ) : (
-      <Icon name="download" size={20} color="black" />
-    )}
-  </TouchableOpacity>
-)}
-
               </View>
             </View>
           </View>
@@ -345,8 +337,6 @@ useEffect(() => {
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   cardWithLine: {
@@ -499,6 +489,5 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 });
-
 
 export default PropertyTile;

@@ -1,5 +1,3 @@
-
-
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
@@ -23,8 +21,15 @@ import {
 } from "../components/api/apiPath";
 import http from "../components/api/server";
 import Footer from "../components/common/Footer";
+import Header from "../components/common/Header";
+
 import PropertyTile from "../components/common/PropertyTile";
 import { RootState } from "../components/slices/store";
+
+type PropertyItem = {
+  propertyId: string | number;
+  [key: string]: any;
+};
 
 const PropertyForm = () => {
   const [propertyData, setPropertyData] = useState<any[]>([]);
@@ -125,12 +130,23 @@ const PropertyForm = () => {
   const headerMemo = useMemo(
     () => (
       <>
+        <Header
+          hideSidebar={false}
+          setHideSidebar={function (value: boolean): void {
+            throw new Error("Function not implemented.");
+          }}
+        />
         <View style={styles.headerRow}>
-  <TouchableOpacity style={styles.scanButton} onPress={handleScanDoor}>
-    <MaterialCommunityIcons name="qrcode-scan" size={22} color="#fff" style={{ marginRight: 8 }} />
-    <Text style={styles.scanButtonText}>Scan Door</Text>
-  </TouchableOpacity>
-</View>
+          <TouchableOpacity style={styles.scanButton} onPress={handleScanDoor}>
+            <MaterialCommunityIcons
+              name="qrcode-scan"
+              size={22}
+              color="#fff"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.scanButtonText}>Scan Door</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.summaryRow}>
           {data?.grandTotalDoors >= 0 && (
@@ -172,7 +188,7 @@ const PropertyForm = () => {
           placeholderTextColor="#888"
           style={styles.searchInput}
           value={searchText}
-          onChangeText={(text) => setSearchText(text)}
+          onChangeText={(text: string) => setSearchText(text)}
         />
       </>
     ),
@@ -193,20 +209,21 @@ const PropertyForm = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <FlatList
+      <FlatList<PropertyItem>
         data={propertyData}
-        keyExtractor={(item, index) =>
-          item.propertyId?.toString() || `property-${index}`
-        }
-        renderItem={({ item }) => (
+        keyExtractor={(
+          item: { propertyId: { toString: () => any } },
+          index: any
+        ) => item.propertyId?.toString() ?? `property-${index}`}
+        renderItem={({ item }: { item: PropertyItem }) => (
           <PropertyTile
             data={item}
             userRole={userRole ?? 0}
-            onViewProperty={(propertyId) => {
-              router.push(`/propertyDetails/${propertyId}` as any);
+            onViewProperty={(propertyId: string | number) => {
+              router.push(`/propertyDetails/${propertyId}`);
             }}
-            onStartSurvey={(propertyId) => {
-              router.push(`/dashboard/${propertyId}` as any);
+            onStartSurvey={(propertyId: string | number) => {
+              router.push(`/dashboard/${propertyId}`);
             }}
           />
         )}
@@ -226,7 +243,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-   scanButton: {
+  scanButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#034694",

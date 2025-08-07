@@ -83,7 +83,13 @@ function MiniCapture({
   return (
     <ScrollView style={styles.card}>
       <Text style={styles.label}>Severity *</Text>
-      <View style={styles.pickerWrapper}>
+      <View  style={{
+                borderWidth: 1,
+                borderColor: "#ccc",
+                borderRadius: 6,
+                backgroundColor: "#e9f1fb",
+                overflow: "hidden",
+              }}>
         <Picker
           selectedValue={formData[fieldSev]}
           enabled={!isView}
@@ -92,16 +98,22 @@ function MiniCapture({
             onHandleActionFieldsChange(value, "Severity");
           }}
         >
-          <Picker.Item label="Select" value="" />
-          <Picker.Item label="Critical" value="1" />
-          <Picker.Item label="High" value="2" />
-          <Picker.Item label="Medium" value="3" />
-          <Picker.Item label="Low" value="4" />
+          <Picker.Item label="Select" value="" color="#999" />
+          <Picker.Item label="Critical" value="1" color="#034694" />
+          <Picker.Item label="High" value="2" color="#034694"/>
+          <Picker.Item label="Medium" value="3" color="#034694"/>
+          <Picker.Item label="Low" value="4" color="#034694"/>
         </Picker>
       </View>
 
       <Text style={styles.label}>Category *</Text>
-      <View style={styles.pickerWrapper}>
+      <View style={{
+                borderWidth: 1,
+                borderColor: "#ccc",
+                borderRadius: 6,
+                backgroundColor: "#e9f1fb",
+                overflow: "hidden",
+              }}>
         <Picker
           selectedValue={formData[fieldCat]}
           enabled={!isView}
@@ -110,12 +122,12 @@ function MiniCapture({
             onHandleActionFieldsChange(value, "Category");
           }}
         >
-          <Picker.Item label="Select" value="" />
-          <Picker.Item label="Fire door Repair" value="1" />
-          <Picker.Item label="Signage repair" value="2" />
-          <Picker.Item label="Fire door Replacement" value="3" />
-          <Picker.Item label="Testing, Records, Log Book" value="4" />
-          <Picker.Item label="Door Replacement required" value="5" />
+          <Picker.Item label="Select" value="" color="#999"/>
+          <Picker.Item label="Fire door Repair" value="1" color="#034694"/>
+          <Picker.Item label="Signage repair" value="2" color="#034694"/>
+          <Picker.Item label="Fire door Replacement" value="3" color="#034694"/>
+          <Picker.Item label="Testing, Records, Log Book" value="4" color="#034694" />
+          <Picker.Item label="Door Replacement required" value="5" color="#034694"/>
         </Picker>
       </View>
 

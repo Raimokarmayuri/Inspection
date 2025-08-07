@@ -49,7 +49,7 @@ const loginStyles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: "#000",
+    color: "black",
     borderWidth: 1,
     borderColor: "#ccc",
     marginBottom: 16,
