@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
   ScrollView,
   Text,
   TextInput,
@@ -274,6 +275,7 @@ const LoginScreen = () => {
             <ScrollView>
             <TextInput
               placeholder="Email"
+                placeholderTextColor="#888" 
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -281,6 +283,7 @@ const LoginScreen = () => {
             />
             <TextInput
               placeholder="Password"
+                placeholderTextColor="#888" 
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -337,16 +340,17 @@ const LoginScreen = () => {
   };
 
   return (
-  <KeyboardAvoidingView
-    style={{ flex: 1, backgroundColor: "#1C1831" }}
-    behavior={Platform.OS === "ios" ? "padding" : undefined}
-  >
-    {/* <TouchableWithoutFeedback onPress={Keyboard.dismiss}> */}
-      <View style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 20 }}
-          keyboardShouldPersistTaps="handled"
-        >
+   <SafeAreaView style={loginStyles.safe} >
+    <KeyboardAvoidingView
+      style={loginStyles.kav}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.select({ ios: 0, android: 0 })}
+    >
+      <ScrollView
+        contentContainerStyle={loginStyles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={loginStyles.card}>
           <View style={loginStyles.logoContainer}>
             <Image
               source={require("../assets/img/Logo.png")}
@@ -354,16 +358,17 @@ const LoginScreen = () => {
               contentFit="contain"
             />
             <Text style={loginStyles.loginHeading}>Inspectra</Text>
+            <Text style={loginStyles.loginSub}>Sign in to continue</Text>
           </View>
 
           <View style={loginStyles.form}>
             {renderStepContent()}
           </View>
-        </ScrollView>
-      </View>
-    {/* </TouchableWithoutFeedback> */}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
     <Toast />
-  </KeyboardAvoidingView>
+  </SafeAreaView>
 );
 
 };

@@ -1,4 +1,16 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
+
+const CARD_BG = "#1C1831";
+const BG = "#1C1831";
+const BRAND = "#F8B84E";
+const BRAND_DARK = "#E7A93D";
+const ACCENT = "#F8B133";
+const TEXT_LIGHT = "#ffffff";
+const TEXT_MUTED = "#cccccc";
+const INPUT_BG = "#ffffff";
+const INPUT_BORDER = "#DADCE0";
+const INPUT_FOCUS = "#7AA7FF";
+const ERROR = "#D93025";
 
 const loginStyles = StyleSheet.create({
   background: {
@@ -7,13 +19,45 @@ const loginStyles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-
+    // card container (looks good on phones and tablets)
+  card: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 520,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#1C1831",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+ safe: {
+    flex: 1,
+    backgroundColor: BG,
+  },
+  kav: {
+    flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    justifyContent: "center",
+  },
   content: {
     flex: 1,
     padding: 20,
     justifyContent: "center",
   },
-
   logoContainer: {
     alignItems: "center",
     marginBottom: 50,
@@ -49,7 +93,7 @@ const loginStyles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: "black",
+    color: "#222121ff",
     borderWidth: 1,
     borderColor: "#ccc",
     marginBottom: 16,

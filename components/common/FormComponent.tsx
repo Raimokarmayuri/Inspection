@@ -69,6 +69,38 @@ interface FormProps {
 
   handleValidationOnSave: (status: string) => void;
 }
+const severityMap: Record<string, string> = {
+  "1": "Critical",
+  "2": "High",
+  "3": "Medium",
+  "4": "Low",
+};
+const categoryMap: Record<string, string> = {
+  "1": "Fire door Repair",
+  "2": "Signage repair",
+  "3": "Fire door Replacement",
+  "4": "Testing, Records, Log Book",
+  "5": "Door Replacement required",
+};
+const hingeMap: Record<string, string> = { "1": "Left", "2": "Right" };
+const fireRatingMap: Record<string, string> = {
+  "1": "FD30",
+  "2": "FD60",
+  "3": "FD90",
+  "4": "FD120",
+  "5": "FD30S",
+  "6": "FD60S",
+  "7": "FD90S",
+  "8": "FD120S",
+};
+const getDoorTypeName = (
+  id?: string | number,
+  opts?: { doorTypeId: number; doorTypeName: string }[]
+) => {
+  if (!id || !opts?.length) return "";
+  const found = opts.find((o) => String(o.doorTypeId) === String(id));
+  return found?.doorTypeName ?? "";
+};
 
 const FormComponent: React.FC<FormProps> = ({
   isView,
@@ -104,6 +136,28 @@ const FormComponent: React.FC<FormProps> = ({
 }) => {
   const navigation = useNavigation();
   const [submitting, setSubmitting] = useState(false);
+const getNum = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const hasActionDataFor = (field: string) => {
+  const fd = formData as any;
+  return Boolean(
+    fd[`${field}Severity`] ||
+    fd[`${field}Category`] ||
+    fd[`${field}Remediation`] ||
+    fd[`${field}Comments`] ||
+    fd[`${field}DueDate`] 
+    // (actionImages?.[field]?.length > 0)
+  );
+};
+
+const shouldShowMini = (field: string) => {
+  if (isView) return hasActionDataFor(field);
+  const val = getNum((formData as any)[field]);
+  return (Number.isFinite(val) && val >= 4) || hasActionDataFor(field);
+};
 
   return (
     <SafeAreaView>
@@ -169,43 +223,34 @@ const FormComponent: React.FC<FormProps> = ({
             editable={false}
           />
 
-          <View style={{ marginBottom: 12 }}>
-            <Text style={styles.label}>Door Type</Text>
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 6,
-                backgroundColor: "#e9f1fb",
-                overflow: "hidden",
-              }}
-            >
+          <Text style={styles.label}>Door Type</Text>
+          {isView ? (
+            <Text style={styles.readOnlyValue}>
+              {getDoorTypeName(formData?.doorType, doorTypesOption) || "—"}
+            </Text>
+          ) : (
+            <View style={styles.pickerWrap}>
               <Picker
-                selectedValue={String(formData?.doorType ?? "")} // ✅ Force string
+                key={`doorType-${isView ? "view" : "edit"}`} // 👈 forces remount on mode change
+                selectedValue={String(formData?.doorType ?? "")}
                 onValueChange={(value) =>
                   handleFormDataChange("doorType", value)
                 }
-                enabled={!isView}
                 dropdownIconColor="#034694"
-                style={{
-                  width: "100%",
-                  backgroundColor: "#e9f1fb",
-                  color: "#034694",
-                  fontSize: 16,
-                }}
+                style={styles.picker}
               >
                 <Picker.Item label="Select" value="" color="#999" />
                 {doorTypesOption.map((type) => (
                   <Picker.Item
                     key={type.doorTypeId}
                     label={type.doorTypeName}
-                    value={String(type.doorTypeId)} // ✅ Value as string
-                    color="#034694" // ✅ Set item color here
+                    value={String(type.doorTypeId)}
+                    color="#034694"
                   />
                 ))}
               </Picker>
             </View>
-          </View>
+          )}
 
           {doorOtherFlag && (
             <>
@@ -233,30 +278,21 @@ const FormComponent: React.FC<FormProps> = ({
             />
           </View>
           {/* 🔥 Fire Rating and Certification */}
-          <View style={{ marginBottom: 12 }}>
-            <Text style={styles.label}>Fire Rating and Certification*</Text>
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 6,
-                backgroundColor: "#e9f1fb",
-                overflow: "hidden",
-              }}
-            >
+          <Text style={styles.label}>Fire Rating and Certification*</Text>
+          {isView ? (
+            <Text style={styles.readOnlyValue}>
+              {fireRatingMap[String(formData?.fireResistance ?? "")] || "—"}
+            </Text>
+          ) : (
+            <View style={styles.pickerWrap}>
               <Picker
-                selectedValue={String(formData?.fireResistance ?? "")} // ✅ force string
+                key={`fire-${isView ? "view" : "edit"}`}
+                selectedValue={String(formData?.fireResistance ?? "")}
                 onValueChange={(value) =>
                   handleFormDataChange("fireResistance", value)
                 }
-                enabled={!isView}
                 dropdownIconColor="#034694"
-                style={{
-                  width: "100%",
-                  backgroundColor: "#e9f1fb",
-                  color: "#034694",
-                  fontSize: 16,
-                }}
+                style={styles.picker}
               >
                 <Picker.Item label="Select" value="" color="#999" />
                 <Picker.Item label="FD30" value="1" color="#034694" />
@@ -269,32 +305,51 @@ const FormComponent: React.FC<FormProps> = ({
                 <Picker.Item label="FD120S" value="8" color="#034694" />
               </Picker>
             </View>
-          </View>
+          )}
 
           <Text style={styles.sectionTitle}>Physical Measurements</Text>
 
           {/* 🧱 Head(mm) Field with MiniCapture */}
+          {/* Head(mm) */}
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.label}>
-              Head(mm)
-              <Text style={{ color: "red" }}>*</Text>
+              Head(mm)<Text style={{ color: "red" }}>*</Text>
             </Text>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
               editable={!isView}
               placeholder="Head(mm)"
-              value={String(formData.head ?? "")} // ✅ Always safe
+              value={String(formData.head ?? "")}
               onChangeText={(value) => handleFormDataChange("head", value)}
               ref={(el) => {
-                if (mandatoryFieldRef?.current) {
+                if (mandatoryFieldRef?.current)
                   mandatoryFieldRef.current.head = el;
-                }
               }}
             />
           </View>
 
-          {actionmenuFlag.head && (
+          {/* ✅ ALWAYS show MiniCapture */}
+          {shouldShowMini("head") && (
+  <MiniCapture
+    key={`mc-${isView ? "view" : "edit"}-head`}
+    isView={isView}
+    fieldValue="head"
+    formData={formData}
+    savedImages={actionImages["head"] ?? []}
+    onImagesChange={(images) => handleImagesChangeMini(images, "head")}
+    onResetChange={() => handleResetAction("head", "PHYSICAL")}
+    onHandleActionFieldsChange={(val, type) =>
+      handleActionFieldsChange("head", type, val)
+    }
+    onImageDelete={(index) => handleDeleteImages(index, "head")}
+    reset={resetCaptureFlag}
+    mandatoryFieldRef={mandatoryFieldRef}
+  />
+)}
+
+
+          {/* {actionmenuFlag.head && (
             <MiniCapture
               isView={isView}
               fieldValue="head"
@@ -311,81 +366,74 @@ const FormComponent: React.FC<FormProps> = ({
               mandatoryFieldRef={mandatoryFieldRef}
               savedImages={[]} // replace with actual saved images if available
             />
-          )}
+          )} */}
 
           {/* Hinge Location */}
-          <View style={{ marginBottom: 12 }}>
-            <Text style={styles.label}>Hinge Location</Text>
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 6,
-                backgroundColor: "#e9f1fb", // Light blue
-                // overflow: "hidden",
-              }}
-            >
+          <Text style={styles.label}>Hinge Location</Text>
+          {isView ? (
+            <Text style={styles.readOnlyValue}>
+              {hingeMap[String(formData?.hingeLocation ?? "")] || "—"}
+            </Text>
+          ) : (
+            <View style={styles.pickerWrap}>
               <Picker
-                selectedValue={formData?.hingeLocation ?? ""}
+                key={`hinge-${isView ? "view" : "edit"}`}
+                selectedValue={String(formData?.hingeLocation ?? "")}
                 onValueChange={(value) =>
                   handleFormDataChange("hingeLocation", value)
                 }
-                enabled={!isView}
                 dropdownIconColor="#034694"
-                style={{
-                  color: "#034694", // ✅ Text color
-                  fontSize: 16,
-                  width: "100%",
-                  backgroundColor: "#e9f1fb",
-                }}
+                style={styles.picker}
               >
                 <Picker.Item label="Select" value="" color="#999" />
                 <Picker.Item label="Left" value="1" color="#034694" />
                 <Picker.Item label="Right" value="2" color="#034694" />
               </Picker>
             </View>
-          </View>
+          )}
 
-          {[
-            "hinge",
-            "closing",
-            "threshold",
-            "doorThickness",
-            "frameDepth",
-            "doorSize",
-            "fullDoorsetSize",
-          ].map((field) => (
-            <View key={field}>
-              <Text style={styles.label}>
-                {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
-              </Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={String(formData[field] || "")}
-                editable={!isView}
-                onChangeText={(text) => handleFormDataChange(field, text)}
-              />
-              {actionmenuFlag[field] && (
-                <MiniCapture
-                  isView={isView}
-                  mandatoryFieldRef={mandatoryFieldRef}
-                  fieldValue={field}
-                  savedImages={actionImages[field] ?? []}
-                  formData={formData}
-                  onImagesChange={(images) =>
-                    handleImagesChangeMini(images, field)
-                  }
-                  onResetChange={() => handleResetAction(field, "PHYSICAL")}
-                  onHandleActionFieldsChange={(e, fieldName) =>
-                    handleActionFieldsChange(e, fieldName, "PHYSICAL")
-                  }
-                  onImageDelete={(index) => handleDeleteImages(index, field)}
-                  reset={resetCaptureFlag}
-                />
-              )}
-            </View>
-          ))}
+        {[
+  "hinge",
+  "closing",
+  "threshold",
+  "doorThickness",
+  "frameDepth",
+  "doorSize",
+  "fullDoorsetSize",
+].map((field) => (
+  <View key={field}>
+    <Text style={styles.label}>
+      {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
+    </Text>
+    <TextInput
+      style={styles.input}
+      keyboardType="numeric"
+      value={String((formData as any)[field] ?? "")}
+      editable={!isView}
+      onChangeText={(text) => handleFormDataChange(field, text)}
+    />
+
+    {shouldShowMini(field) && (
+      <MiniCapture
+        key={`mc-${isView ? "view" : "edit"}-${field}`}
+        isView={isView}
+        fieldValue={field}
+        formData={formData}
+        savedImages={actionImages[field] ?? []}
+        onImagesChange={(images) => handleImagesChangeMini(images, field)}
+        onResetChange={() => handleResetAction(field, "PHYSICAL")}
+        onHandleActionFieldsChange={(val, type) =>
+          handleActionFieldsChange(field, type, val)
+        }
+        onImageDelete={(index) => handleDeleteImages(index, field)}
+        reset={resetCaptureFlag}
+        mandatoryFieldRef={mandatoryFieldRef}
+      />
+    )}
+  </View>
+))}
+
+
 
           <Text style={styles.sectionTitle}>Compliance Check</Text>
 
@@ -596,9 +644,7 @@ const FormComponent: React.FC<FormProps> = ({
                 }}
                 onPress={() => navigation.goBack()}
               >
-                <Text style={{ color: "#000", fontWeight: "bold" }}>
-                  ← Back
-                </Text>
+                <Text style={{ color: "#000", fontWeight: "bold" }}>Back</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -623,6 +669,35 @@ const FormComponent: React.FC<FormProps> = ({
 
           {/* Add additional compliance fields similarly */}
         </View>
+         <TouchableOpacity
+                      onPress={() => navigation.goBack()}
+                      style={[
+                        
+                        {
+                          backgroundColor: "#ffffff", // white background
+                          marginTop: 30,
+                          marginBottom: 20,
+                          paddingVertical: 14,
+                          borderRadius: 8,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 2,
+                          elevation: 2,
+                          borderWidth: 1, // black border
+                          borderColor: "#000000",
+                        },
+                      ]}
+                      // onPress={handleSubmit}
+                    >
+                      <Text
+                        style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}
+                      >
+                        Back
+                      </Text>
+                    </TouchableOpacity>
         <Footer />
       </ScrollView>
     </SafeAreaView>
@@ -649,6 +724,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     color: "#333",
   },
+  readOnlyValue: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#f8f8f8",
+    fontSize: 16,
+    color: "#333",
+  },
+
   imageSection: {
     borderWidth: 1,
     borderColor: "#ccc",
@@ -658,6 +744,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     minHeight: 10,
     width: "100%",
+  },
+  pickerWrap: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    backgroundColor: "#e9f1fb",
+    overflow: "hidden",
+  },
+  picker: {
+    width: "100%",
+    backgroundColor: "#e9f1fb",
+    color: "#034694",
+    fontSize: 16,
   },
 
   card: {

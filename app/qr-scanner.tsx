@@ -58,7 +58,7 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function QRScanner() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -74,14 +74,23 @@ export default function QRScanner() {
     })();
   }, [permission?.granted]);
 
-  const onBarcodeScanned = useCallback(({ data, type }: { data: string; type: string }) => {
-    if (scanned) return;
-    setScanned(true);
-    console.log("Scanned:", type, data);
-    // TODO: use `data` (e.g., navigate to dashboard)
-    // router.push(`/dashboard/${extractId(data)}`);
-    alert(`QR: ${data}`);
-  }, [scanned]);
+  const onBarcodeScanned = useCallback(({ data }: { data: string }) => {
+  if (scanned) return;
+  setScanned(true);
+
+  console.log("Scanned QR:", data);
+
+  if (data.startsWith("http://") || data.startsWith("https://")) {
+    Linking.openURL(data).catch(err => {
+      console.error("Failed to open URL:", err);
+      alert(`Could not open: ${data}`);
+    });
+  } else {
+    alert(`Scanned: ${data}`);
+    // Or navigate somewhere: router.push(`/dashboard/${encodeURIComponent(data)}`)
+  }
+}, [scanned]);
+
 
   if (!permission) {
     return <SafeAreaView style={styles.center}><Text>Requesting camera permission…</Text></SafeAreaView>;

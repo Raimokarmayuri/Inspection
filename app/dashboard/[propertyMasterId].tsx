@@ -33,6 +33,38 @@ import MiniCapture from "../../components/common/MiniCapture";
 import QrScanner from "../../components/common/QrScanner";
 import { hostName } from "../../components/config/config";
 
+// import * as FileSystem from "expo-file-system";
+// import { Platform } from "react-native";
+
+/** Guess MIME from extension */
+const guessMimeFromName = (name: string) => {
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  return "image/jpeg";
+};
+
+/** Convert base64 Data URL to a temp file URI for RN */
+async function base64DataUrlToFileUri(dataUrl: string): Promise<{ uri: string; name: string; type: string }> {
+  const match = dataUrl.match(/^data:(.+?);base64,(.*)$/);
+  const type = match?.[1] || "image/jpeg";
+  const base64 = match?.[2] || dataUrl.replace(/^data:.+;base64,/, "");
+  const name = `Upload_${Date.now()}.${type.includes("png") ? "png" : "jpg"}`;
+  const path = FileSystem.cacheDirectory + name;
+  await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+  return { uri: path, name, type };
+}
+
+/** Normalize any path or base64 string into an uploadable object */
+async function normaliseForUpload(src: string, field: string): Promise<{ uri: string; name: string; type: string }> {
+  if (src.startsWith("data:image/")) {
+    return base64DataUrlToFileUri(src);
+  }
+  const name = `${field}_Image_${Date.now()}.jpg`;
+  return { uri: src, name, type: guessMimeFromName(name) };
+}
+
+
 const Dashboard = () => {
   const route = useRoute<any>();
   const navigation = useNavigation();
@@ -733,42 +765,59 @@ const Dashboard = () => {
     return new File([u8arr], filename, { type: mime });
   };
 
-  const uploadImageAPI = async (
-    newImages: string[],
-    field: string
-  ): Promise<string> => {
-    try {
-      const latestImage = newImages[newImages.length - 1];
-      const file = base64ToFile(
-        latestImage,
-        `${field}_Image_${Date.now()}.jpg`
-      );
-      const formDataToUpload = new FormData();
-      formDataToUpload.append("File", file);
-      formDataToUpload.append("Client", "ABC");
-      formDataToUpload.append("Property", "Candor");
-      formDataToUpload.append("InspectionDate", new Date().toISOString());
-
-      const response = await fetch(`${hostName}api/Inspection/upload`, {
-        method: "POST",
-        body: formDataToUpload,
-        headers: {
-          Authorization: `Bearer ${userObj?.token}`,
-        },
-      });
-      console.log("Auth Token:", `Bearer ${userObj?.token}`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const dataResponse = await response.json();
-      return dataResponse?.result?.blobUrl || "";
-    } catch (error: any) {
-      setError(error?.data || error);
+const uploadImageAPI = async (newImages: string[], field: string): Promise<string> => {
+  try {
+    if (!userObj?.token) {
+      console.warn("No auth token found in userObj");
       return "";
     }
-  };
+
+    const latest = newImages[newImages.length - 1];
+    let filePart: { uri?: string; name: string; type: string } | Blob;
+    let name = `${field}_Image_${Date.now()}.jpg`;
+    let type = "image/jpeg";
+
+    if (Platform.OS === "web") {
+      const res = await fetch(latest);
+      const blob = await res.blob();
+      type = blob.type || type;
+      filePart = blob;
+    } else {
+      const parts = await normaliseForUpload(latest, field);
+      name = parts.name;
+      type = parts.type;
+      filePart = { uri: parts.uri, name, type };
+    }
+
+    const form = new FormData();
+    form.append("File", filePart as any, name);
+    form.append("Client", "ABC");
+    form.append("Property", "Candor");
+    form.append("InspectionDate", new Date().toISOString());
+
+    const resp = await fetch(`${hostName}api/Inspection/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${userObj.token}`,
+      },
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      console.error("Upload failed:", resp.status, text);
+      return "";
+    }
+
+    const data = await resp.json().catch(() => ({} as any));
+    return data?.result?.blobUrl || "";
+  } catch (err: any) {
+    console.error("uploadImageAPI error:", err);
+    return "";
+  }
+};
+
+
 
   const handleImagesChange = async (newImages: string[], field: string) => {
     const uploadedUrl = await uploadImageAPI(newImages, field);

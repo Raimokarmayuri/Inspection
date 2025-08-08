@@ -30,7 +30,7 @@ import DataGridTable from "../../components/common/DataGridTable"; // adjust pat
 import Footer from "../../components/common/Footer";
 import { Statuses, UserRoles } from "../../components/common/constants";
 
-import Header from "@/components/common/Header";
+// import Header from "@/components/common/Header";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/FontAwesome"; // or Feather, MaterialIcons, etc.
 
@@ -225,12 +225,12 @@ const PropertyDetailsScreen = () => {
     <>
       <SafeAreaView style={styles.container}>
         <ScrollView>
-          <Header
+          {/* <Header
             hideSidebar={false}
             setHideSidebar={function (value: boolean): void {
               throw new Error("Function not implemented.");
             }}
-          />
+          /> */}
 
           {/* {(userRole === UserRoles.ADMIN || userRole === UserRoles.APPROVER) &&
             propertyInfo?.status === Statuses.COMPLETED && (

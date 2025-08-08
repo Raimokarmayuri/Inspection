@@ -221,6 +221,7 @@ import React, { ChangeEvent, useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -285,46 +286,49 @@ const Capture: React.FC<CaptureProps> = ({
     onImagesChange(images);
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      base64: true,
-      quality: 1,
-    });
+const pickImage = async () => {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    base64: true,    // ok to keep for preview
+    quality: 0.9,
+  });
 
-    if (!result.canceled && result.assets?.length > 0) {
-      const base64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      const newImages = singleImageCapture
-        ? [base64]
-        : [...capturedImages, base64];
-      updateImages(newImages);
-    }
-  };
+  if (!result.canceled && result.assets?.length > 0) {
+    const a = result.assets[0];
+    // Prefer file URI for upload; keep dataURL for web preview if you want
+    const chosen = Platform.OS === "web" && a.base64
+      ? `data:image/jpeg;base64,${a.base64}`
+      : a.uri;
 
-  const captureImage = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        "Camera Permission Denied",
-        "Please allow camera access to take photos."
-      );
-      return;
-    }
+    const newImages = singleImageCapture ? [chosen] : [...capturedImages, chosen];
+    updateImages(newImages);
+  }
+};
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      base64: true,
-      quality: 1,
-    });
+const captureImage = async () => {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) {
+    Alert.alert("Camera Permission Denied", "Please allow camera access to take photos.");
+    return;
+  }
 
-    if (!result.canceled && result.assets?.length > 0) {
-      const base64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      const newImages = singleImageCapture
-        ? [base64]
-        : [...capturedImages, base64];
-      updateImages(newImages);
-    }
-  };
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    base64: true,
+    quality: 0.9,
+  });
+
+  if (!result.canceled && result.assets?.length > 0) {
+    const a = result.assets[0];
+    const taken = Platform.OS === "web" && a.base64
+      ? `data:image/jpeg;base64,${a.base64}`
+      : a.uri;
+
+    const newImages = singleImageCapture ? [taken] : [...capturedImages, taken];
+    updateImages(newImages);
+  }
+};
+
 
   const removeImage = (index: number) => {
     const newImages = capturedImages.filter((_, i) => i !== index);

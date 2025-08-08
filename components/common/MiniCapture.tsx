@@ -1,34 +1,78 @@
+// MiniCapture.tsx
 import { Picker } from "@react-native-picker/picker";
-import { useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import {
   Image,
-  ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { hostName } from "../config/config";
 
 interface MiniCaptureProps {
   isView: boolean;
   savedImages: string[];
-  fieldValue: string;
+  fieldValue: string; // e.g., "head", "hinge"
   formData: Record<string, any>;
   onImagesChange: (images: string[], file?: string) => void;
   onResetChange: () => void;
-  onHandleActionFieldsChange: (value: string, type: string) => void;
+  onHandleActionFieldsChange: (
+    value: string,
+    type: "Severity" | "Category" | "Remediation" | "Comments" | "DueDate"
+  ) => void;
   onImageDelete: (index: number) => void;
   reset: boolean;
-  mandatoryFieldRef: React.MutableRefObject<
-    Record<string, TextInput | null>
-  >;
+  mandatoryFieldRef: React.MutableRefObject<Record<string, TextInput | null>>;
 }
 
-function MiniCapture({
+const severityMap: Record<string, string> = {
+  "": "Select",
+  "1": "Critical",
+  "2": "High",
+  "3": "Medium",
+  "4": "Low",
+};
+const categoryMap: Record<string, string> = {
+  "": "Select",
+  "1": "Fire door Repair",
+  "2": "Signage repair",
+  "3": "Fire door Replacement",
+  "4": "Testing, Records, Log Book",
+  "5": "Door Replacement required",
+};
+
+// MiniCapture.tsx (only relevant changes shown)
+
+// helper inside MiniCapture (top-level in the component file is fine)
+const getSeverityDate = (severityValue: string) => {
+  const today = new Date();
+  const ymd = (d: Date) => d.toISOString().split("T")[0];
+
+  switch (severityValue) {
+    case "1": // Critical -> today
+      return ymd(today);
+    case "2": // High -> +30 days
+      return ymd(
+        new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30)
+      );
+    case "3": // Medium -> +90 days
+      return ymd(
+        new Date(today.getFullYear(), today.getMonth(), today.getDate() + 90)
+      );
+    case "4": // Low -> +180 days
+      return ymd(
+        new Date(today.getFullYear(), today.getMonth(), today.getDate() + 180)
+      );
+    default:
+      return "";
+  }
+};
+
+const MiniCapture = ({
   isView,
-  savedImages,
+  savedImages = [],
   fieldValue,
   formData,
   onImagesChange,
@@ -36,139 +80,179 @@ function MiniCapture({
   onHandleActionFieldsChange,
   onImageDelete,
   reset,
-  mandatoryFieldRef,
-}: MiniCaptureProps) {
-  const [capturedImages, setCapturedImages] = useState<string[]>([]);
-  const [hideRemediation, setHideRemediation] = useState(false);
+}: MiniCaptureProps) => {
+  const editable = !isView;
 
-  const fieldComm = fieldValue + "Comments";
-  const fieldSev = fieldValue + "Severity";
-  const fieldCat = fieldValue + "Category";
-  const fieldDue = fieldValue + "DueDate";
-  const fieldRemed = fieldValue + "Remediation";
+  // dynamic keys
+  const fieldSev = `${fieldValue}Severity`;
+  const fieldCat = `${fieldValue}Category`;
+  const fieldRem = `${fieldValue}Remediation`;
+  const fieldCom = `${fieldValue}Comments`;
+  const fieldDue = `${fieldValue}DueDate`;
 
-  const ImageProxyBaseUrl = hostName + "api/Inspection/api/image?blobUrl=";
+  // read current values directly from parent
+  const sev = String(formData?.[fieldSev] ?? "");
+  const cat = String(formData?.[fieldCat] ?? "");
+  const rem = String(formData?.[fieldRem] ?? "");
+  const com = String(formData?.[fieldCom] ?? "");
+  const due = String(formData?.[fieldDue] ?? "");
 
-  useEffect(() => {
-    if (reset) {
-      setCapturedImages([]);
-      onImagesChange([], "");
-    }
-    if (savedImages?.length > 0) {
-      setCapturedImages(savedImages);
-    }
-    setHideRemediation(formData[fieldCat] === "5");
-  }, [reset]);
+  // robust numeric parse for measurement
+  const measurementVal = useMemo(() => {
+    const raw = formData?.[fieldValue];
+    if (raw == null) return NaN;
+    const num = parseFloat(String(raw).replace(/,/g, "").trim());
+    return Number.isFinite(num) ? num : NaN;
+  }, [formData, fieldValue]);
 
-  const removeImage = (indexToRemove: number) => {
-    const newImages = capturedImages.filter(
-      (_, index) => index !== indexToRemove
-    );
-    setCapturedImages(newImages);
-    onImageDelete(indexToRemove);
-  };
+  // visibility:
+  // - view: show if severity saved
+  // - edit: show if measurement >= 4 OR severity saved
+  const hasSavedSeverity = !!sev;
+  const shouldShow = isView
+    ? hasSavedSeverity
+    : (Number.isFinite(measurementVal) && measurementVal >= 4) ||
+      hasSavedSeverity;
 
-  const handleReset = () => {
-    setCapturedImages([]);
-    onImagesChange([], "");
-    onResetChange();
-  };
-
-  const resetIndividualField = (field: string) => {
-    // This is a placeholder: TextInput in React Native doesn't support direct styling like web
-    // You can use error state to highlight fields conditionally instead
-    // mandatoryFieldRef.current[field]?.setNativeProps({ style: { borderColor: 'red' } });
-  };
+  if (!shouldShow) return null;
 
   return (
-    <ScrollView style={styles.card}>
-      <Text style={styles.label}>Severity *</Text>
-      <View  style={{
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 6,
-                backgroundColor: "#e9f1fb",
-                overflow: "hidden",
-              }}>
-        <Picker
-          selectedValue={formData[fieldSev]}
-          enabled={!isView}
-          onValueChange={(value) => {
-            resetIndividualField(fieldSev);
-            onHandleActionFieldsChange(value, "Severity");
-          }}
-        >
-          <Picker.Item label="Select" value="" color="#999" />
-          <Picker.Item label="Critical" value="1" color="#034694" />
-          <Picker.Item label="High" value="2" color="#034694"/>
-          <Picker.Item label="Medium" value="3" color="#034694"/>
-          <Picker.Item label="Low" value="4" color="#034694"/>
-        </Picker>
-      </View>
-
-      <Text style={styles.label}>Category *</Text>
-      <View style={{
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 6,
-                backgroundColor: "#e9f1fb",
-                overflow: "hidden",
-              }}>
-        <Picker
-          selectedValue={formData[fieldCat]}
-          enabled={!isView}
-          onValueChange={(value) => {
-            setHideRemediation(value === "5");
-            onHandleActionFieldsChange(value, "Category");
-          }}
-        >
-          <Picker.Item label="Select" value="" color="#999"/>
-          <Picker.Item label="Fire door Repair" value="1" color="#034694"/>
-          <Picker.Item label="Signage repair" value="2" color="#034694"/>
-          <Picker.Item label="Fire door Replacement" value="3" color="#034694"/>
-          <Picker.Item label="Testing, Records, Log Book" value="4" color="#034694" />
-          <Picker.Item label="Door Replacement required" value="5" color="#034694"/>
-        </Picker>
-      </View>
-
-      <Text style={styles.label}>Due Date *</Text>
-      <TextInput
-        style={styles.input}
-        editable={false}
-        value={formData[fieldDue]}
-      />
-
-      {!hideRemediation && (
-        <View>
-          <Text style={styles.label}>Remedial/Action Required *</Text>
-          <TextInput
-            style={styles.input}
-            editable={!isView}
-            value={formData[fieldRemed]}
-            onChangeText={(text) => {
-              resetIndividualField(fieldRemed);
-              onHandleActionFieldsChange(text, "Remediation");
+    <View style={styles.card} pointerEvents="auto">
+      {/* Severity */}
+      <Text style={styles.label}>
+        Severity <Text style={{ color: "red" }}>*</Text>
+      </Text>
+      {isView ? (
+        <Text style={styles.readOnly}>{severityMap[sev] || "—"}</Text>
+      ) : (
+        <View style={[styles.pickerWrap, styles.touchFix]} pointerEvents="auto">
+          <Picker
+            key={`sev-${fieldValue}-edit`}
+            selectedValue={sev}
+            onValueChange={(v) => {
+              const val = String(v);
+              // 1) update severity
+              onHandleActionFieldsChange(val, "Severity");
+              // 2) compute & update due date for THIS field
+              const due = getSeverityDate(val);
+              onHandleActionFieldsChange(due, "DueDate");
             }}
-          />
+            enabled={true}
+            mode={Platform.OS === "android" ? "dropdown" : "dialog"}
+            dropdownIconColor="#034694"
+            style={styles.picker}
+          >
+            <Picker.Item label="Select" value="" color="#999" />
+            <Picker.Item label="Critical" value="1" color="#034694" />
+            <Picker.Item label="High" value="2" color="#034694" />
+            <Picker.Item label="Medium" value="3" color="#034694" />
+            <Picker.Item label="Low" value="4" color="#034694" />
+          </Picker>
         </View>
       )}
 
-      <Text style={styles.label}>Comments</Text>
-      <TextInput
-        style={[styles.input, { height: 100 }]}
-        multiline
-        editable={!isView}
-        value={formData[fieldComm]}
-        onChangeText={(text) => onHandleActionFieldsChange(text, "Comments")}
-      />
+      {/* Category + Due Date */}
+      <View >
+        <View style={{ flex: 2 }}>
+          <Text style={styles.smallLabel}>
+            Category <Text style={{ color: "red" }}>*</Text>
+          </Text>
+          {isView ? (
+            <Text style={styles.readOnly}>{categoryMap[cat] || "—"}</Text>
+          ) : (
+            <View
+              style={[styles.pickerWrap, styles.touchFix]}
+              pointerEvents="auto"
+            >
+              <Picker
+                key={`cat-${fieldValue}-edit`}
+                selectedValue={cat}
+                onValueChange={(v) =>
+                  onHandleActionFieldsChange(String(v), "Category")
+                }
+                enabled={true}
+                mode={Platform.OS === "android" ? "dropdown" : "dialog"}
+                dropdownIconColor="#034694"
+                style={styles.picker}
+              >
+                <Picker.Item label="Select" value="" color="#999" />
+                <Picker.Item
+                  label="Fire door Repair"
+                  value="1"
+                  color="#034694"
+                />
+                <Picker.Item label="Signage repair" value="2" color="#034694" />
+                <Picker.Item
+                  label="Fire door Replacement"
+                  value="3"
+                  color="#034694"
+                />
+                <Picker.Item
+                  label="Testing, Records, Log Book"
+                  value="4"
+                  color="#034694"
+                />
+                <Picker.Item
+                  label="Door Replacement required"
+                  value="5"
+                  color="#034694"
+                />
+              </Picker>
+            </View>
+          )}
+        </View>
 
-      {capturedImages.length > 0 && (
+        {/* <Text style={styles.dot}>•</Text> */}
+
+        <View style={{ flex: 1 }}>
+          <Text style={styles.smallLabel}>
+            Due Date <Text style={{ color: "red" }}>*</Text>
+          </Text>
+          <Text style={styles.readOnly}>{due || "—"}</Text>
+        </View>
+      </View>
+
+      {/* Remediation (hidden when Category = 5) */}
+      {cat !== "5" && (
+        <>
+          <Text style={styles.label}>
+            Remedial/Action required <Text style={{ color: "red" }}>*</Text>
+          </Text>
+          {isView ? (
+            <Text style={styles.readOnly}>{rem || "—"}</Text>
+          ) : (
+            <TextInput
+              style={styles.input}
+              value={rem}
+              onChangeText={(t) => onHandleActionFieldsChange(t, "Remediation")}
+              editable={editable}
+            />
+          )}
+        </>
+      )}
+
+      {/* Comments */}
+      <Text style={styles.label}>Comments</Text>
+      {isView ? (
+        <Text style={styles.readOnly}>{com || "—"}</Text>
+      ) : (
+        <TextInput
+          style={[styles.input, { height: 100 }]}
+          multiline
+          value={com}
+          onChangeText={(t) => onHandleActionFieldsChange(t, "Comments")}
+          editable={editable}
+        />
+      )}
+
+      {/* Images */}
+      {savedImages.length > 0 && (
         <View style={styles.imageRow}>
-          {capturedImages.map((img, index) => (
-            <View key={index} style={styles.imageWrapper}>
+          {savedImages.map((img, i) => (
+            <View key={i} style={styles.imageWrapper}>
               <Image source={{ uri: img }} style={styles.image} />
               {!isView && (
-                <TouchableOpacity onPress={() => removeImage(index)}>
+                <TouchableOpacity onPress={() => onImageDelete(i)}>
                   <Text style={styles.removeText}>X</Text>
                 </TouchableOpacity>
               )}
@@ -176,61 +260,72 @@ function MiniCapture({
           ))}
         </View>
       )}
-    </ScrollView>
+    </View>
   );
-}
+};
 
-export default MiniCapture;
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
-    padding: 16,
     borderRadius: 8,
-    margin: 16,
-    elevation: 3,
+    padding: 12,
+    marginBottom: 16,
   },
-  label: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginTop: 12,
+  row: { flexDirection: "row", alignItems: "center", marginTop: 10 },
+  dot: { marginHorizontal: 6, color: "#666", fontSize: 18, marginTop: 22 },
+
+  label: { marginTop: 8, marginBottom: 4, fontWeight: "600", color: "#034694" },
+  smallLabel: {
+    marginBottom: 4,
+    fontWeight: "600",
+    color: "#034694",
+    fontSize: 12,
+  },
+
+  readOnly: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: "#f0f4f8",
+    color: "#333",
   },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: "#f8f8f8",
-    marginBottom: 12,
+    backgroundColor: "#e9f1fb",
   },
-  pickerWrapper: {
+  pickerWrap: {
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 6,
-    marginBottom: 12,
+    backgroundColor: "#e9f1fb",
   },
-  imageRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-start",
+  picker: {
+    width: "100%",
+    backgroundColor: "#e9f1fb",
+    color: "#034694",
+    fontSize: 16,
   },
-  imageWrapper: {
-    position: "relative",
-    margin: 5,
-  },
-  image: {
-    width: 100,
-    height: 100,
-    borderRadius: 6,
-  },
+  touchFix: { zIndex: 999, elevation: 12, overflow: "visible" },
+
+  imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 },
+  imageWrapper: { position: "relative", marginRight: 10, marginBottom: 10 },
+  image: { width: 90, height: 90, borderRadius: 6 },
   removeText: {
     position: "absolute",
-    top: 0,
-    right: 5,
-    color: "red",
-    fontWeight: "bold",
-    backgroundColor: "white",
-    paddingHorizontal: 4,
+    top: 2,
+    right: 6,
+    fontWeight: "700",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    color: "#fff",
+    paddingHorizontal: 6,
     borderRadius: 10,
   },
 });
+
+export default MiniCapture;

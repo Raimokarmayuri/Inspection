@@ -11,7 +11,6 @@ import {
   View,
 } from "react-native";
 
-import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useSelector } from "react-redux";
@@ -21,7 +20,7 @@ import {
 } from "../components/api/apiPath";
 import http from "../components/api/server";
 import Footer from "../components/common/Footer";
-import Header from "../components/common/Header";
+// import Header from "../components/common/Header";
 
 import PropertyTile from "../components/common/PropertyTile";
 import { RootState } from "../components/slices/store";
@@ -105,37 +104,39 @@ const PropertyForm = () => {
   const gotoDashboard = () => {
     navigation.navigate("Survey"); // Change this to your actual route
   };
+const handleScanDoor = () => {
+  router.push("/qr-scanner" as never); // ✅ not navigation.navigate("QRScanner")
+};
+  // const handleScanDoor = async () => {
+  //   const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
-  const handleScanDoor = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+  //   if (!permissionResult.granted) {
+  //     alert("Camera permission is required!");
+  //     return;
+  //   }
 
-    if (!permissionResult.granted) {
-      alert("Camera permission is required!");
-      return;
-    }
+  //   const result = await ImagePicker.launchCameraAsync({
+  //     allowsEditing: false,
+  //     quality: 1,
+  //     base64: false,
+  //   });
 
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false,
-      quality: 1,
-      base64: false,
-    });
-
-    if (!result.canceled && result.assets?.length > 0) {
-      const photo = result.assets[0];
-      console.log("Scanned image URI:", photo.uri);
-      // TODO: Use the photo (send to API, display preview, etc.)
-    }
-  };
+  //   if (!result.canceled && result.assets?.length > 0) {
+  //     const photo = result.assets[0];
+  //     console.log("Scanned image URI:", photo.uri);
+  //     // TODO: Use the photo (send to API, display preview, etc.)
+  //   }
+  // };
 
   const headerMemo = useMemo(
     () => (
       <>
-        <Header
+        {/* <Header
           hideSidebar={false}
           setHideSidebar={function (value: boolean): void {
             throw new Error("Function not implemented.");
           }}
-        />
+        /> */}
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.scanButton} onPress={handleScanDoor}>
             <MaterialCommunityIcons
