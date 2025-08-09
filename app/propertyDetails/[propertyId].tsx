@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { Buffer } from "buffer";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useSelector } from "react-redux";
@@ -173,9 +174,11 @@ const PropertyDetailsScreen = () => {
   //   }
   // };
 
-  const handleDownload = async () => {
-    setShowLoader(true);
-    try {
+ const handleDownload = async () => {
+  setShowLoader(true);
+  try {
+    if (Platform.OS === "web") {
+      // Web: keep Blob + anchor
       const res = await http.get(DOOR_INSPECTION_API, {
         params: { propertyId },
         responseType: "blob",
@@ -183,41 +186,82 @@ const PropertyDetailsScreen = () => {
 
       const file = new Blob([res.data], { type: "application/pdf" });
       const fileURL = URL.createObjectURL(file);
-
-      if (Platform.OS === "web") {
-        const link = document.createElement("a");
-        link.href = fileURL;
-        link.download = `${propertyId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        const path = `${FileSystem.documentDirectory}${propertyId}.pdf`;
-        const reader = new FileReader();
-
-        reader.onload = async () => {
-          if (typeof reader.result === "string") {
-            const base64 = reader.result.split(",")[1];
-            if (base64) {
-              await FileSystem.writeAsStringAsync(path, base64, {
-                encoding: FileSystem.EncodingType.Base64,
-              });
-              await Sharing.shareAsync(path);
-            }
-          } else {
-            console.error("Expected base64 string, got ArrayBuffer");
-          }
-        };
-
-        reader.readAsDataURL(file);
-      }
-    } catch (err) {
-      console.error("Download error", err);
-      Alert.alert("Error", "Failed to download PDF");
-    } finally {
-      setShowLoader(false);
+      const link = document.createElement("a");
+      link.href = fileURL;
+      link.download = `${propertyId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(fileURL);
+      return;
     }
-  };
+
+    // React Native: request as arraybuffer and convert to base64
+    const res = await http.get(DOOR_INSPECTION_API, {
+      params: { propertyId },
+      responseType: "arraybuffer",
+    });
+
+    const base64 = Buffer.from(res.data, "binary").toString("base64");
+    const fileUri = `${FileSystem.documentDirectory}${propertyId}.pdf`;
+
+    await FileSystem.writeAsStringAsync(fileUri, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "application/pdf",
+        dialogTitle: `Share ${propertyId}.pdf`,
+        UTI: "com.adobe.pdf",
+      });
+    } else {
+      Alert.alert(
+        "Saved",
+        `PDF saved to app storage.\nPath:\n${fileUri}\n\nUse a file manager to access it.`
+      );
+    }
+  } catch (err) {
+    console.error("Download error", err);
+    Alert.alert("Error", "Failed to download PDF");
+  } finally {
+    setShowLoader(false);
+  }
+};
+
+// ---- Status helpers (single source of truth) ----
+const isPropertyCompleted =
+  complianceData?.propertyStatus === Statuses.COMPLETED ||
+  propertyInfo?.status === Statuses.COMPLETED;
+
+const isPropertyInProgress =
+  complianceData?.propertyStatus === Statuses.INREVIEW ||
+  propertyInfo?.status === Statuses.INREVIEW;
+
+const isInspector = userRole === UserRoles.INSPECTOR;
+const isAssigned = !!propertyUserRoleMappingId;
+const hasInspectorCompleted = inspectorInspectionStatus === Statuses.COMPLETED;
+
+// If you have a "SUBMITTED/INREVIEW" per-inspector status, add it here.
+// Otherwise we just rely on "not COMPLETED" as the condition to show the button.
+const isInspectorPending = inspectorInspectionStatus !== Statuses.COMPLETED;
+
+// ---- Final booleans ----
+// Show when: inspector, assigned, not completed yet, and the whole property isn’t already completed
+const canSubmitForApproval =
+  isInspector && isAssigned && isInspectorPending && !isPropertyCompleted;
+
+// From previous message (reuse for download)
+const canAdminOrApproverDownload =
+  (userRole === UserRoles.ADMIN || userRole === UserRoles.APPROVER) && isPropertyCompleted;
+
+const canInspectorDownload =
+  isInspector && hasInspectorCompleted; // only after they’ve completed their part
+
+const canDownload = canAdminOrApproverDownload || canInspectorDownload;
+
+
   if (loading)
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
 
@@ -286,9 +330,10 @@ const PropertyDetailsScreen = () => {
           <Text><Text style={styles.bold}>Approval Date:</Text> {new Date(complianceData?.approvalDate).toLocaleDateString()}</Text>
         )} */}
 
-            {(userRole === UserRoles.ADMIN ||
+            {/* {(userRole === UserRoles.ADMIN ||
               userRole === UserRoles.APPROVER) &&
-              propertyInfo?.status === Statuses.COMPLETED && (
+              propertyInfo?.status === Statuses.COMPLETED && ( */}
+              {canDownload && (
                 <TouchableOpacity
                   style={{
                     flexDirection: "row",
@@ -467,8 +512,9 @@ const PropertyDetailsScreen = () => {
               )}
             </View>
 
-            {userRole === UserRoles.INSPECTOR &&
-              inspectorInspectionStatus !== Statuses.COMPLETED && (
+            {/* {userRole === UserRoles.INSPECTOR &&
+              inspectorInspectionStatus !== Statuses.COMPLETED && ( */}
+              {canSubmitForApproval && (
                 <Button
                   title="Submit for Approval"
                   onPress={submitForApproval}

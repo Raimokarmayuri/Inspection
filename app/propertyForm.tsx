@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   SafeAreaView,
   StyleSheet,
@@ -32,6 +33,8 @@ type PropertyItem = {
 
 const PropertyForm = () => {
   const [propertyData, setPropertyData] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,28 +110,7 @@ const PropertyForm = () => {
 const handleScanDoor = () => {
   router.push("/qr-scanner" as never); // ✅ not navigation.navigate("QRScanner")
 };
-  // const handleScanDoor = async () => {
-  //   const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
-  //   if (!permissionResult.granted) {
-  //     alert("Camera permission is required!");
-  //     return;
-  //   }
-
-  //   const result = await ImagePicker.launchCameraAsync({
-  //     allowsEditing: false,
-  //     quality: 1,
-  //     base64: false,
-  //   });
-
-  //   if (!result.canceled && result.assets?.length > 0) {
-  //     const photo = result.assets[0];
-  //     console.log("Scanned image URI:", photo.uri);
-  //     // TODO: Use the photo (send to API, display preview, etc.)
-  //   }
-  // };
-
-  const headerMemo = useMemo(
+ const headerMemo = useMemo(
     () => (
       <>
         {/* <Header
@@ -208,8 +190,12 @@ const handleScanDoor = () => {
     );
   }
 
+  
   return (
     <SafeAreaView style={styles.container}>
+       {loading ? (
+                        <ActivityIndicator size="large" color="black" />
+                      ) : (
       <FlatList<PropertyItem>
         data={propertyData}
         keyExtractor={(
@@ -233,6 +219,7 @@ const handleScanDoor = () => {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }}
         keyboardShouldPersistTaps="handled"
       />
+                      )}
     </SafeAreaView>
   );
 };

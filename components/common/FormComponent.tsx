@@ -136,28 +136,28 @@ const FormComponent: React.FC<FormProps> = ({
 }) => {
   const navigation = useNavigation();
   const [submitting, setSubmitting] = useState(false);
-const getNum = (v: any) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : NaN;
-};
+  const getNum = (v: any) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  };
 
-const hasActionDataFor = (field: string) => {
-  const fd = formData as any;
-  return Boolean(
-    fd[`${field}Severity`] ||
-    fd[`${field}Category`] ||
-    fd[`${field}Remediation`] ||
-    fd[`${field}Comments`] ||
-    fd[`${field}DueDate`] 
-    // (actionImages?.[field]?.length > 0)
-  );
-};
+  const hasActionDataFor = (field: string) => {
+    const fd = formData as any;
+    return Boolean(
+      fd[`${field}Severity`] ||
+        fd[`${field}Category`] ||
+        fd[`${field}Remediation`] ||
+        fd[`${field}Comments`] ||
+        fd[`${field}DueDate`]
+      // (actionImages?.[field]?.length > 0)
+    );
+  };
 
-const shouldShowMini = (field: string) => {
-  if (isView) return hasActionDataFor(field);
-  const val = getNum((formData as any)[field]);
-  return (Number.isFinite(val) && val >= 4) || hasActionDataFor(field);
-};
+  const shouldShowMini = (field: string) => {
+    if (isView) return hasActionDataFor(field);
+    const val = getNum((formData as any)[field]);
+    return (Number.isFinite(val) && val >= 4) || hasActionDataFor(field);
+  };
 
   return (
     <SafeAreaView>
@@ -331,23 +331,24 @@ const shouldShowMini = (field: string) => {
 
           {/* ✅ ALWAYS show MiniCapture */}
           {shouldShowMini("head") && (
-  <MiniCapture
-    key={`mc-${isView ? "view" : "edit"}-head`}
-    isView={isView}
-    fieldValue="head"
-    formData={formData}
-    savedImages={actionImages["head"] ?? []}
-    onImagesChange={(images) => handleImagesChangeMini(images, "head")}
-    onResetChange={() => handleResetAction("head", "PHYSICAL")}
-    onHandleActionFieldsChange={(val, type) =>
-      handleActionFieldsChange("head", type, val)
-    }
-    onImageDelete={(index) => handleDeleteImages(index, "head")}
-    reset={resetCaptureFlag}
-    mandatoryFieldRef={mandatoryFieldRef}
-  />
-)}
-
+            <MiniCapture
+              key={`mc-${isView ? "view" : "edit"}-head`}
+              isView={isView}
+              fieldValue="head"
+              formData={formData}
+              savedImages={actionImages["head"] ?? []}
+              onImagesChange={(images) =>
+                handleImagesChangeMini(images, "head")
+              }
+              onResetChange={() => handleResetAction("head", "PHYSICAL")}
+              onHandleActionFieldsChange={(val, type) =>
+                handleActionFieldsChange("head", type, val)
+              }
+              onImageDelete={(index) => handleDeleteImages(index, "head")}
+              reset={resetCaptureFlag}
+              mandatoryFieldRef={mandatoryFieldRef}
+            />
+          )}
 
           {/* {actionmenuFlag.head && (
             <MiniCapture
@@ -392,48 +393,48 @@ const shouldShowMini = (field: string) => {
             </View>
           )}
 
-        {[
-  "hinge",
-  "closing",
-  "threshold",
-  "doorThickness",
-  "frameDepth",
-  "doorSize",
-  "fullDoorsetSize",
-].map((field) => (
-  <View key={field}>
-    <Text style={styles.label}>
-      {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
-    </Text>
-    <TextInput
-      style={styles.input}
-      keyboardType="numeric"
-      value={String((formData as any)[field] ?? "")}
-      editable={!isView}
-      onChangeText={(text) => handleFormDataChange(field, text)}
-    />
+          {[
+            "hinge",
+            "closing",
+            "threshold",
+            "doorThickness",
+            "frameDepth",
+            "doorSize",
+            "fullDoorsetSize",
+          ].map((field) => (
+            <View key={field}>
+              <Text style={styles.label}>
+                {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
+              </Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={String((formData as any)[field] ?? "")}
+                editable={!isView}
+                onChangeText={(text) => handleFormDataChange(field, text)}
+              />
 
-    {shouldShowMini(field) && (
-      <MiniCapture
-        key={`mc-${isView ? "view" : "edit"}-${field}`}
-        isView={isView}
-        fieldValue={field}
-        formData={formData}
-        savedImages={actionImages[field] ?? []}
-        onImagesChange={(images) => handleImagesChangeMini(images, field)}
-        onResetChange={() => handleResetAction(field, "PHYSICAL")}
-        onHandleActionFieldsChange={(val, type) =>
-          handleActionFieldsChange(field, type, val)
-        }
-        onImageDelete={(index) => handleDeleteImages(index, field)}
-        reset={resetCaptureFlag}
-        mandatoryFieldRef={mandatoryFieldRef}
-      />
-    )}
-  </View>
-))}
-
-
+              {shouldShowMini(field) && (
+                <MiniCapture
+                  key={`mc-${isView ? "view" : "edit"}-${field}`}
+                  isView={isView}
+                  fieldValue={field}
+                  formData={formData}
+                  savedImages={actionImages[field] ?? []}
+                  onImagesChange={(images) =>
+                    handleImagesChangeMini(images, field)
+                  }
+                  onResetChange={() => handleResetAction(field, "PHYSICAL")}
+                  onHandleActionFieldsChange={(val, type) =>
+                    handleActionFieldsChange(field, type, val)
+                  }
+                  onImageDelete={(index) => handleDeleteImages(index, field)}
+                  reset={resetCaptureFlag}
+                  mandatoryFieldRef={mandatoryFieldRef}
+                />
+              )}
+            </View>
+          ))}
 
           <Text style={styles.sectionTitle}>Compliance Check</Text>
 
@@ -669,35 +670,32 @@ const shouldShowMini = (field: string) => {
 
           {/* Add additional compliance fields similarly */}
         </View>
-         <TouchableOpacity
-                      onPress={() => navigation.goBack()}
-                      style={[
-                        
-                        {
-                          backgroundColor: "#ffffff", // white background
-                          marginTop: 30,
-                          marginBottom: 20,
-                          paddingVertical: 14,
-                          borderRadius: 8,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          shadowColor: "#000",
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.1,
-                          shadowRadius: 2,
-                          elevation: 2,
-                          borderWidth: 1, // black border
-                          borderColor: "#000000",
-                        },
-                      ]}
-                      // onPress={handleSubmit}
-                    >
-                      <Text
-                        style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}
-                      >
-                        Back
-                      </Text>
-                    </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={[
+            {
+              backgroundColor: "#ffffff", // white background
+              marginTop: 30,
+              marginBottom: 20,
+              paddingVertical: 14,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+              elevation: 2,
+              borderWidth: 1, // black border
+              borderColor: "#000000",
+            },
+          ]}
+          // onPress={handleSubmit}
+        >
+          <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
+            Back
+          </Text>
+        </TouchableOpacity>
         <Footer />
       </ScrollView>
     </SafeAreaView>

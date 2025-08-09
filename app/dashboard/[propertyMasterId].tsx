@@ -45,25 +45,31 @@ const guessMimeFromName = (name: string) => {
 };
 
 /** Convert base64 Data URL to a temp file URI for RN */
-async function base64DataUrlToFileUri(dataUrl: string): Promise<{ uri: string; name: string; type: string }> {
+async function base64DataUrlToFileUri(
+  dataUrl: string
+): Promise<{ uri: string; name: string; type: string }> {
   const match = dataUrl.match(/^data:(.+?);base64,(.*)$/);
   const type = match?.[1] || "image/jpeg";
   const base64 = match?.[2] || dataUrl.replace(/^data:.+;base64,/, "");
   const name = `Upload_${Date.now()}.${type.includes("png") ? "png" : "jpg"}`;
   const path = FileSystem.cacheDirectory + name;
-  await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+  await FileSystem.writeAsStringAsync(path, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
   return { uri: path, name, type };
 }
 
 /** Normalize any path or base64 string into an uploadable object */
-async function normaliseForUpload(src: string, field: string): Promise<{ uri: string; name: string; type: string }> {
+async function normaliseForUpload(
+  src: string,
+  field: string
+): Promise<{ uri: string; name: string; type: string }> {
   if (src.startsWith("data:image/")) {
     return base64DataUrlToFileUri(src);
   }
   const name = `${field}_Image_${Date.now()}.jpg`;
   return { uri: src, name, type: guessMimeFromName(name) };
 }
-
 
 const Dashboard = () => {
   const route = useRoute<any>();
@@ -765,59 +771,60 @@ const Dashboard = () => {
     return new File([u8arr], filename, { type: mime });
   };
 
-const uploadImageAPI = async (newImages: string[], field: string): Promise<string> => {
-  try {
-    if (!userObj?.token) {
-      console.warn("No auth token found in userObj");
+  const uploadImageAPI = async (
+    newImages: string[],
+    field: string
+  ): Promise<string> => {
+    try {
+      if (!userObj?.token) {
+        console.warn("No auth token found in userObj");
+        return "";
+      }
+
+      const latest = newImages[newImages.length - 1];
+      let filePart: { uri?: string; name: string; type: string } | Blob;
+      let name = `${field}_Image_${Date.now()}.jpg`;
+      let type = "image/jpeg";
+
+      if (Platform.OS === "web") {
+        const res = await fetch(latest);
+        const blob = await res.blob();
+        type = blob.type || type;
+        filePart = blob;
+      } else {
+        const parts = await normaliseForUpload(latest, field);
+        name = parts.name;
+        type = parts.type;
+        filePart = { uri: parts.uri, name, type };
+      }
+
+      const form = new FormData();
+      form.append("File", filePart as any, name);
+      form.append("Client", "ABC");
+      form.append("Property", "Candor");
+      form.append("InspectionDate", new Date().toISOString());
+
+      const resp = await fetch(`${hostName}api/Inspection/upload`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${userObj.token}`,
+        },
+        body: form,
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        console.error("Upload failed:", resp.status, text);
+        return "";
+      }
+
+      const data = await resp.json().catch(() => ({} as any));
+      return data?.result?.blobUrl || "";
+    } catch (err: any) {
+      console.error("uploadImageAPI error:", err);
       return "";
     }
-
-    const latest = newImages[newImages.length - 1];
-    let filePart: { uri?: string; name: string; type: string } | Blob;
-    let name = `${field}_Image_${Date.now()}.jpg`;
-    let type = "image/jpeg";
-
-    if (Platform.OS === "web") {
-      const res = await fetch(latest);
-      const blob = await res.blob();
-      type = blob.type || type;
-      filePart = blob;
-    } else {
-      const parts = await normaliseForUpload(latest, field);
-      name = parts.name;
-      type = parts.type;
-      filePart = { uri: parts.uri, name, type };
-    }
-
-    const form = new FormData();
-    form.append("File", filePart as any, name);
-    form.append("Client", "ABC");
-    form.append("Property", "Candor");
-    form.append("InspectionDate", new Date().toISOString());
-
-    const resp = await fetch(`${hostName}api/Inspection/upload`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${userObj.token}`,
-      },
-      body: form,
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      console.error("Upload failed:", resp.status, text);
-      return "";
-    }
-
-    const data = await resp.json().catch(() => ({} as any));
-    return data?.result?.blobUrl || "";
-  } catch (err: any) {
-    console.error("uploadImageAPI error:", err);
-    return "";
-  }
-};
-
-
+  };
 
   const handleImagesChange = async (newImages: string[], field: string) => {
     const uploadedUrl = await uploadImageAPI(newImages, field);
@@ -1149,7 +1156,8 @@ const uploadImageAPI = async (newImages: string[], field: string): Promise<strin
           />
 
           <Text style={styles.label}>Door Type*</Text>
-          <View style={{
+          <View
+            style={{
               borderWidth: 1,
               borderColor: "#ccc",
               borderRadius: 6,
@@ -1158,7 +1166,8 @@ const uploadImageAPI = async (newImages: string[], field: string): Promise<strin
               height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
               justifyContent: "center",
               marginTop: 8,
-            }}>
+            }}
+          >
             <Picker
               selectedValue={formData.doorType}
               onValueChange={(value) => handleFormDataChange("doorType", value)}
@@ -1319,17 +1328,17 @@ const uploadImageAPI = async (newImages: string[], field: string): Promise<strin
 
         <Text style={styles.label}>Fire Rating and Certification*</Text>
         <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 6,
-              backgroundColor: "#e9f1fb",
-              overflow: "hidden",
-              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
-              justifyContent: "center",
-              marginTop: 8,
-            }}
-          >
+          style={{
+            borderWidth: 1,
+            borderColor: "#ccc",
+            borderRadius: 6,
+            backgroundColor: "#e9f1fb",
+            overflow: "hidden",
+            height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
+            justifyContent: "center",
+            marginTop: 8,
+          }}
+        >
           <Picker
             selectedValue={String(formData?.fireResistance ?? "")} // ✅ force string
             onValueChange={(value) =>
@@ -1434,18 +1443,18 @@ const uploadImageAPI = async (newImages: string[], field: string): Promise<strin
                 <Text style={styles.label}>
                   Hinge Location <Text style={{ color: "red" }}>*</Text>
                 </Text>
-                 <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 6,
-              backgroundColor: "#e9f1fb",
-              overflow: "hidden",
-              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
-              justifyContent: "center",
-              marginTop: 8,
-            }}
-          >
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ccc",
+                    borderRadius: 6,
+                    backgroundColor: "#e9f1fb",
+                    overflow: "hidden",
+                    height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
+                    justifyContent: "center",
+                    marginTop: 8,
+                  }}
+                >
                   <Picker
                     selectedValue={formData?.hingeLocation ?? ""}
                     onValueChange={(value) =>
@@ -1591,33 +1600,67 @@ const uploadImageAPI = async (newImages: string[], field: string): Promise<strin
           />
         </View>
       </ScrollView>
-
-      <TouchableOpacity
-        style={[
-          styles.button,
-          {
-            backgroundColor: "#ffffff", // white background
-            marginTop: 30,
-            marginBottom: 20,
-            paddingVertical: 14,
-            borderRadius: 8,
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 2,
-            elevation: 2,
-            borderWidth: 1, // black border
-            borderColor: "#000000",
-          },
-        ]}
-        onPress={handleSubmit}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginTop: 30,
+        }}
       >
-        <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
-          {submitting ? "Submitting..." : "Submit"}
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.button,
+            {
+              backgroundColor: "#ffffff",
+              paddingVertical: 14,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+              elevation: 2,
+              borderWidth: 1,
+              borderColor: "#000000",
+              flex: 1, // equal space
+              marginRight: 8, // gap between buttons
+            },
+          ]}
+          onPress={handleSubmit}
+        >
+          <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
+            {submitting ? "Submitting..." : "Submit"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={[
+            styles.button,
+            {
+              backgroundColor: "#ffffff",
+              paddingVertical: 14,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+              elevation: 2,
+              borderWidth: 1,
+              borderColor: "#000000",
+              flex: 1, // equal space
+              marginLeft: 8, // gap between buttons
+            },
+          ]}
+        >
+          <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
+            Back
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {message ? (
         <View

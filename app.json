@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
+         "NSAllowsArbitraryLoads": true,
         "NSCameraUsageDescription": "This app uses the camera to take photos.",
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload images.",
         "ITSAppUsesNonExemptEncryption": false
@@ -19,6 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "usesCleartextTraffic": true,
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
