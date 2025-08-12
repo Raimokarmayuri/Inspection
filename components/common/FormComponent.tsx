@@ -106,6 +106,7 @@ const getDoorTypeName = (
   return found?.doorTypeName ?? "";
 };
 
+
 const FormComponent: React.FC<FormProps> = ({
   isView,
   basicFormData,
@@ -140,17 +141,24 @@ const FormComponent: React.FC<FormProps> = ({
 }) => {
   const navigation = useNavigation();
   const [submitting, setSubmitting] = useState(false);
-  const getNum = (v: any) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : NaN;
-  };
+  
 
   // put this helper near the top of FormComponent
-  const savedFor = (field: string) =>
-    mergeImages(
-      (formData as any)?.[`${field}Images`] as string[] | undefined,
-      actionImages?.[field] as string[] | undefined
-    );
+  // const savedFor = (field: string) =>
+  //   mergeImages(
+  //     (formData as any)?.[`${field}Images`] as string[] | undefined,
+  //     actionImages?.[field] as string[] | undefined
+  //   );
+
+    const getImagesForField = (field: string) => {
+  // In view mode we can merge; in edit mode, actionImages is the single source of truth
+  return isView
+    ? mergeImages(
+        (formData as any)?.[`${field}Images`] as string[] | undefined,
+        actionImages?.[field] as string[] | undefined
+      )
+    : (actionImages?.[field] ?? []);
+};
 
   const hasActionDataFor = (field: string) => {
     const fd = formData as any;
@@ -167,11 +175,23 @@ const FormComponent: React.FC<FormProps> = ({
     );
   };
 
-  const shouldShowMini = (field: string) => {
-    if (isView) return hasActionDataFor(field);
-    const val = getNum((formData as any)[field]);
-    return (Number.isFinite(val) && val >= 4) || hasActionDataFor(field);
-  };
+ const ACTION_THRESHOLD = 3;
+
+// slightly sturdier number parser
+const getNum = (v: any) => {
+  if (v === null || v === undefined) return NaN;
+  const n = Number(String(v).trim());
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const shouldShowMini = (field: string) => {
+  // In view mode: show if any action data (severity/category/images/comments/etc.) exists
+  if (isView) return hasActionDataFor(field);
+
+  // In edit mode: show if value is strictly > 3 OR there is existing action data
+  const val = getNum((formData as any)[field]);
+  return (Number.isFinite(val) && val > ACTION_THRESHOLD) || hasActionDataFor(field);
+};
 
   return (
     <SafeAreaView>
@@ -351,7 +371,7 @@ const FormComponent: React.FC<FormProps> = ({
               isView={isView}
               fieldValue="head"
               formData={formData}
-              savedImages={savedFor("head")}
+               savedImages={getImagesForField("head")}
               onImagesChange={(images) =>
                 handleImagesChangeMini(images, "head")
               }
@@ -436,7 +456,7 @@ const FormComponent: React.FC<FormProps> = ({
                   fieldValue={field}
                   formData={formData}
                   //  savedImages={savedFor("head")}
-                  savedImages={savedFor(field)} // ⬅️ merged images here
+                  savedImages={getImagesForField(field)}// ⬅️ merged images here
                   onImagesChange={(images) =>
                     handleImagesChangeMini(images, field)
                   }

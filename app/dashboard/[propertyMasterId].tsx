@@ -1,7 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -328,31 +327,31 @@ const Dashboard = () => {
     }
   };
 
-  const pickImage = async (field: string) => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      base64: true,
-    });
+  // const pickImage = async (field: string) => {
+  //   let result = await ImagePicker.launchImageLibraryAsync({
+  //     mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  //     quality: 0.8,
+  //     base64: true,
+  //   });
 
-    if (!result.canceled && result.assets?.length > 0) {
-      const asset = result.assets[0];
-      const uri = asset.base64
-        ? `data:image/jpeg;base64,${asset.base64}`
-        : asset.uri;
+  //   if (!result.canceled && result.assets?.length > 0) {
+  //     const asset = result.assets[0];
+  //     const uri = asset.base64
+  //       ? `data:image/jpeg;base64,${asset.base64}`
+  //       : asset.uri;
 
-      if (field === "floorPlan") {
-        // Upload the image
-        const uploadedUrl = await uploadImageAPI([uri], "Floor");
-        if (uploadedUrl) {
-          setBasicInfo((prev) => ({
-            ...prev,
-            floorPlan: [...(prev.floorPlan || []), uploadedUrl],
-          }));
-        }
-      }
-    }
-  };
+  //     if (field === "floorPlan") {
+  //       // Upload the image
+  //       const uploadedUrl = await uploadImageAPI([uri], "Floor");
+  //       if (uploadedUrl) {
+  //         setBasicInfo((prev) => ({
+  //           ...prev,
+  //           floorPlan: [...(prev.floorPlan || []), uploadedUrl],
+  //         }));
+  //       }
+  //     }
+  //   }
+  // };
 
   const BASE_MEASURES: Record<string, number> = {
     head: 3,
@@ -515,60 +514,60 @@ const Dashboard = () => {
     setActionMenuFlag((prev) => ({ ...prev, [name]: show }));
   };
 
-  const uploadImageAPIMini = async (
-    uri: string,
-    field: string,
-    userObj: { token?: string }
-  ): Promise<string> => {
-    try {
-      if (!userObj?.token) {
-        console.warn("No auth token found");
-        return "";
-      }
+  // const uploadImageAPIMini = async (
+  //   uri: string,
+  //   field: string,
+  //   userObj: { token?: string }
+  // ): Promise<string> => {
+  //   try {
+  //     if (!userObj?.token) {
+  //       console.warn("No auth token found");
+  //       return "";
+  //     }
 
-      let filePart: { uri?: string; name: string; type: string } | File;
-      let name = `${field}_Image_${Date.now()}.jpg`;
-      let type = "image/jpeg";
+  //     let filePart: { uri?: string; name: string; type: string } | File;
+  //     let name = `${field}_Image_${Date.now()}.jpg`;
+  //     let type = "image/jpeg";
 
-      if (Platform.OS === "web") {
-        // uri can be data:, blob:, or http(s)
-        const res = await fetch(uri);
-        const blob = await res.blob();
-        type = blob.type || type;
-        filePart = new File([blob], name, { type });
-      } else {
-        const parts = await normaliseForUpload(uri, field);
-        name = parts.name;
-        type = parts.type;
-        filePart = { uri: parts.uri, name, type } as any;
-      }
+  //     if (Platform.OS === "web") {
+  //       // uri can be data:, blob:, or http(s)
+  //       const res = await fetch(uri);
+  //       const blob = await res.blob();
+  //       type = blob.type || type;
+  //       filePart = new File([blob], name, { type });
+  //     } else {
+  //       const parts = await normaliseForUpload(uri, field);
+  //       name = parts.name;
+  //       type = parts.type;
+  //       filePart = { uri: parts.uri, name, type } as any;
+  //     }
 
-      const form = new FormData();
-      form.append("File", filePart as any, name);
-      form.append("Client", "ABC");
-      form.append("Property", "Candor");
-      form.append("InspectionDate", new Date().toISOString());
+  //     const form = new FormData();
+  //     form.append("File", filePart as any, name);
+  //     form.append("Client", "ABC");
+  //     form.append("Property", "Candor");
+  //     form.append("InspectionDate", new Date().toISOString());
 
-      const resp = await fetch(`${hostName}api/Inspection/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${userObj.token}` },
-        body: form,
-      });
+  //     const resp = await fetch(`${hostName}api/Inspection/upload`, {
+  //       method: "POST",
+  //       headers: { Authorization: `Bearer ${userObj.token}` },
+  //       body: form,
+  //     });
 
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => "");
-        console.error("Upload failed:", resp.status, text);
-        return "";
-      }
+  //     if (!resp.ok) {
+  //       const text = await resp.text().catch(() => "");
+  //       console.error("Upload failed:", resp.status, text);
+  //       return "";
+  //     }
 
-      const data = await resp.json().catch(() => ({} as any));
-      // server returns { result: { blobUrl: "https://..." } }
-      return data?.result?.blobUrl || "";
-    } catch (e) {
-      console.error("uploadImageAPIMini error:", e);
-      return "";
-    }
-  };
+  //     const data = await resp.json().catch(() => ({} as any));
+  //     // server returns { result: { blobUrl: "https://..." } }
+  //     return data?.result?.blobUrl || "";
+  //   } catch (e) {
+  //     console.error("uploadImageAPIMini error:", e);
+  //     return "";
+  //   }
+  // };
 
   const handleImagesChangeMini = async (
     newImages: string[],

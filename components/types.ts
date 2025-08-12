@@ -84,6 +84,7 @@ export interface FormData {
   fullDoorsetSize: string;
   comments: string;
 photos: string[];
+
   [key: string]: string | string[] | undefined;
 }
 

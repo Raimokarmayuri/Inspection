@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Button,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -45,7 +46,9 @@ const PropertyDetailsScreen = () => {
   const itemsPerPage = 4;
 
   const [showLoader, setShowLoader] = useState(false);
-
+ // ✅ New states for confirmation modal & submit loader
+  const [showConfirmBox, setShowConfirmBox] = useState(false);
+  const [showSubmitLoader, setShowSubmitLoader] = useState(false);
   //   const { propertyId } = route.params as { propertyId: string };
 
   const { userObj } = useSelector((state: any) => state.user);
@@ -135,26 +138,87 @@ const PropertyDetailsScreen = () => {
     currentPage * itemsPerPage
   );
 
-  // const totalPages = Math.ceil(
-  //   complianceData?.doorComplianceDetails?.length / itemsPerPage
-  // );
 
-  const submitForApproval = async () => {
+
+
+  // const submitForApproval = async () => {
+  //   try {
+  //     await http.put(
+  //       `${UPDATE_PROPERTY_USER_MAPPING_STATUS}${propertyUserRoleMappingId}`,
+  //       {
+  //         propertyUserRoleMappingId,
+  //         status: Statuses.COMPLETED,
+  //         propertyMasterId: propertyId,
+  //       }
+  //     );
+  //     Alert.alert("Success", "Survey submitted for approval");
+  //     navigation.goBack();
+  //   } catch (err) {
+  //     Alert.alert("Error", "Submission failed");
+  //   }
+  // };
+
+   // 📌 From your JS code
+  const onSubmitForApproval = () => {
+    setShowConfirmBox(true);
+  };
+
+  const UpdateStatus = async () => {
+    if (!propertyUserRoleMappingId) return;
+
+    setShowSubmitLoader(true);
+    const payload = {
+      propertyUserRoleMappingId,
+      status: Statuses.COMPLETED,
+      propertyMasterId: propertyId,
+      userId: userObj?.userId,
+      email: userObj?.userEmail,
+    };
+
     try {
-      await http.put(
+      const response = await http.put(
         `${UPDATE_PROPERTY_USER_MAPPING_STATUS}${propertyUserRoleMappingId}`,
-        {
-          propertyUserRoleMappingId,
-          status: Statuses.COMPLETED,
-          propertyMasterId: propertyId,
-        }
+        payload
       );
-      Alert.alert("Success", "Survey submitted for approval");
-      navigation.goBack();
-    } catch (err) {
-      Alert.alert("Error", "Submission failed");
+
+      if (response.status === 200) {
+        Alert.alert("Success", "Survey has been submitted for approval");
+      } else {
+        Alert.alert("Error", "Error in saving data, please try again");
+      }
+
+      setShowConfirmBox(false);
+      setTimeout(() => {
+        // refresh screen
+        navigation.goBack();
+      }, 3000);
+    } catch (error) {
+      console.error("API Error:", error);
+      Alert.alert("Error", "Something went wrong while submitting");
+    } finally {
+      setShowSubmitLoader(false);
     }
   };
+
+  const handleCancel = () => {
+    setShowConfirmBox(false);
+  };
+
+  //  const isInspector = userRole === UserRoles.INSPECTOR;
+  // const isAssigned = !!propertyUserRoleMappingId;
+  // const hasInspectorCompleted = inspectorInspectionStatus === Statuses.COMPLETED;
+  // const isInspectorPending = inspectorInspectionStatus !== Statuses.COMPLETED;
+  // const isPropertyCompleted =
+  //   complianceData?.propertyStatus === Statuses.COMPLETED ||
+  //   propertyInfo?.status === Statuses.COMPLETED;
+
+  // const canSubmitForApproval =
+  //   isInspector && isAssigned && isInspectorPending && !isPropertyCompleted;
+
+  if (loading) {
+    return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
+  }
+
 
   // const handleDownload = async () => {
   //   setShowLoader(true); // Show loader
@@ -514,12 +578,9 @@ const canDownload = canAdminOrApproverDownload || canInspectorDownload;
 
             {/* {userRole === UserRoles.INSPECTOR &&
               inspectorInspectionStatus !== Statuses.COMPLETED && ( */}
-              {canSubmitForApproval && (
-                <Button
-                  title="Submit for Approval"
-                  onPress={submitForApproval}
-                />
-              )}
+               {canSubmitForApproval && (
+          <Button title="Submit for Approval" onPress={onSubmitForApproval} />
+        )}
 
             <TouchableOpacity
               onPress={() => navigation.goBack()}
@@ -557,7 +618,29 @@ const canDownload = canAdminOrApproverDownload || canInspectorDownload;
           onPress={() => navigation.goBack()}
         />
       </View> */}
-
+  {/* ✅ Confirmation Modal */}
+        <Modal visible={showConfirmBox} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
+                Are you sure you want to submit for approval?
+              </Text>
+              {showSubmitLoader ? (
+                <ActivityIndicator size="large" color="blue" />
+              ) : (
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity style={styles.modalButton} onPress={UpdateStatus}>
+                    <Text style={styles.modalButtonText}>Yes</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.modalButton, { backgroundColor: "grey" }]} onPress={handleCancel}>
+                    <Text style={styles.modalButtonText}>No</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+        
           <Footer />
         </ScrollView>
       </SafeAreaView>
@@ -573,6 +656,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#f2f2f2",
     flex: 1,
   },
+  // container: { flex: 1, paddingHorizontal: 16, paddingTop: 16, backgroundColor: "#f2f2f2" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  modalContainer: { width: "80%", backgroundColor: "white", padding: 20, borderRadius: 8 },
+  modalButtonRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 20 },
+  modalButton: { backgroundColor: "#007bff", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6 },
+  modalButtonText: { color: "white", fontSize: 16 },
   card: {
     backgroundColor: "#fff",
     borderRadius: 8,
