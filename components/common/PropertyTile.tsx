@@ -5,8 +5,17 @@ import {
   MaterialIcons,
 } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
-import { isMobile } from "react-device-detect";
-import { ActivityIndicator, Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Linking,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useSelector } from "react-redux";
 import { DOOR_INSPECTION_API, GET_PROPERTY_USER_MAPPING } from "../api/apiPath";
@@ -14,6 +23,8 @@ import http from "../api/server";
 import { Statuses, UserRoles } from "./constants";
 
 
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 interface PropertyTileProps {
   data: any;
@@ -31,167 +42,166 @@ const PropertyTile: React.FC<PropertyTileProps> = ({
   onStartSurvey,
 }) => {
   const [showLoader, setShowLoader] = useState(false);
-const [showNewSurveyIcon, setShowNewSurveyIcon] = useState(false);
+  const [showNewSurveyIcon, setShowNewSurveyIcon] = useState(false);
   const [showDownloadIcon, setShowDownloadIcon] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const { userObj } = useSelector((state: any) => state.user);
-const {
-  propertyMasterId,
-  propertyName,
-  propertyLocation,
-  inspectedBy,
-  lastInspectionDate,
-  nextInspectionDueDate,
-  status,
-  totalAttention,
-} = data;
-const propertyId: string | number = propertyMasterId;
+  const {
+    propertyMasterId,
+    propertyName,
+    propertyLocation,
+    inspectedBy,
+    lastInspectionDate,
+    nextInspectionDueDate,
+    status,
+    totalAttention,
+  } = data;
+  const propertyId: string | number = propertyMasterId;
 
+  
+  useEffect(() => {
+    if (!userObj || !propertyMasterId) return;
 
-useEffect(() => {
-  if (!userObj || !propertyMasterId) return;
+    const getPropertyUserMapping = async () => {
+      try {
+        const propInfoResp = await http.get(
+          GET_PROPERTY_USER_MAPPING + propertyMasterId
+        );
 
-  const getPropertyUserMapping = async () => {
-  try {
-    const propInfoResp = await http.get(
-      GET_PROPERTY_USER_MAPPING + propertyMasterId
-    );
+        if (!propInfoResp?.status || !propInfoResp?.data) return;
 
-    if (!propInfoResp?.status || !propInfoResp?.data) return;
+        const inspectorInspectionStatus = propInfoResp.data.find(
+          (d: any) => d.userId === userObj.userId
+        )?.status;
 
-    const inspectorInspectionStatus =
-      propInfoResp.data.find((d: any) => d.userId === userObj.userId)?.status;
+        const now = new Date();
+        const nextDue = new Date(nextInspectionDueDate);
 
-    const now = new Date();
-    const nextDue = new Date(nextInspectionDueDate);
+        const isInspector = userRole === UserRoles.INSPECTOR;
+        const isApprover = userRole === UserRoles.APPROVER;
+        const isAdmin = userRole === UserRoles.ADMIN;
 
-    const isInspector = userRole === UserRoles.INSPECTOR;
-    const isApprover = userRole === UserRoles.APPROVER;
-    const isAdmin = userRole === UserRoles.ADMIN;
+        if (
+          isInspector &&
+          ((status !== Statuses.COMPLETED &&
+            status !== Statuses.REJECTED &&
+            status !== Statuses.SUBMITTEDFORAPPROVAL &&
+            inspectorInspectionStatus !== Statuses.COMPLETED) ||
+            (nextDue <= now && nextDue.getFullYear() > now.getFullYear() - 1))
+        ) {
+          setShowNewSurveyIcon(true);
+        } else {
+          setShowNewSurveyIcon(false);
+        }
 
-    if (
-      isInspector &&
-      (
-        (
-          status !== Statuses.COMPLETED &&
-          status !== Statuses.REJECTED &&
-          status !== Statuses.SUBMITTEDFORAPPROVAL &&
-          inspectorInspectionStatus !== Statuses.COMPLETED
-        ) ||
-        (
-          nextDue <= now &&
-          nextDue.getFullYear() > now.getFullYear() - 1
-        )
-      )
-    ) {
-      setShowNewSurveyIcon(true);
-    } else {
-      setShowNewSurveyIcon(false);
-    }
-
-    if (status === Statuses.COMPLETED && (isApprover || isAdmin)) {
-      setShowDownloadIcon(true);
-    } else {
-      setShowDownloadIcon(false);
-    }
-  } catch (err) {
-    console.error("Failed to fetch user mapping:", err);
-  }
-};
-
-  getPropertyUserMapping();
-}, [userObj, propertyMasterId, nextInspectionDueDate, status, userRole]);
-
-
-  const handleDownloadClick = async (propertyId: string | number) => {
-    setShowLoader(true);
-    try {
-      const response = await http.get(DOOR_INSPECTION_API, {
-        params: { propertyId },
-        responseType: "blob",
-      });
-
-      const file = new Blob([response.data], { type: "application/pdf" });
-      const fileURL = URL.createObjectURL(file);
-
-      setPdfUrl(fileURL);
-
-      if (isMobile) {
-        const link = document.createElement("a");
-        link.href = fileURL;
-        link.download = `${propertyId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        setShowPdfModal(true);
+        if (status === Statuses.COMPLETED && (isApprover || isAdmin)) {
+          setShowDownloadIcon(false);
+        } else {
+          setShowDownloadIcon(true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user mapping:", err);
       }
-    } catch (error) {
-      console.error("Download Failed", error);
-    } finally {
-      setShowLoader(false);
-    }
-  };
+    };
 
- 
+    getPropertyUserMapping();
+  }, [userObj, propertyMasterId, nextInspectionDueDate, status, userRole]);
 
-  // useEffect(() => {
-  //   if (!userObj) return;
-
-  //   const checkSurveyPermissions = async () => {
-  //     try {
-  //       const response = await axios.get(
-  //         `http://your-ip/api/property-user-mapping/${propertyMasterId}`
-  //       );
-  //       const mapping = response.data.find(
-  //         (d: any) => d.userId === userObj.userId
-  //       );
-  //       const inspectorStatus = mapping?.status;
-
-  //       const now = new Date();
-  //       const nextDate = new Date(nextInspectionDueDate);
-
-  //       const canStartSurvey =
-  //         ((status !== Statuses.COMPLETED && status !== Statuses.REJECTED) ||
-  //           inspectorStatus !== Statuses.COMPLETED ||
-  //           nextDate <= now) &&
-  //         userRole === UserRoles.INSPECTOR;
-
-  //       setShowNewSurveyIcon(canStartSurvey);
-
-  //       if (
-  //         status === Statuses.COMPLETED &&
-  //         (userRole === UserRoles.ADMIN || userRole === UserRoles.APPROVER)
-  //       ) {
-  //         setShowDownloadIcon(true);
-  //       }
-  //     } catch (error) {
-  //       console.error("Error checking permissions", error);
-  //     }
-  //   };
-
-  //   checkSurveyPermissions();
-  // }, [userObj]);
-
-  // const handleDownloadClick = async () => {
+  // const handleDownloadClick = async (propertyId: string | number) => {
+  //   setShowLoader(true);
   //   try {
-  //     setShowLoader(true);
-  //     const response = await axios.get("http://your-ip/api/door-inspection", {
-  //       params: { propertyId: propertyMasterId },
+  //     const response = await http.get(DOOR_INSPECTION_API, {
+  //       params: { propertyId },
   //       responseType: "blob",
   //     });
 
   //     const file = new Blob([response.data], { type: "application/pdf" });
   //     const fileURL = URL.createObjectURL(file);
+
   //     setPdfUrl(fileURL);
-  //     setShowPdfModal(true);
+
+  //     if (isMobile) {
+  //       const link = document.createElement("a");
+  //       link.href = fileURL;
+  //       link.download = `${propertyId}.pdf`;
+  //       document.body.appendChild(link);
+  //       link.click();
+  //       document.body.removeChild(link);
+  //     } else {
+  //       setShowPdfModal(true);
+  //     }
   //   } catch (error) {
-  //     console.error("Download failed", error);
+  //     console.error("Download Failed", error);
   //   } finally {
   //     setShowLoader(false);
   //   }
   // };
+
+  // import { BASE_URL } from "../api/apiPath"; // if you have one
+  // import { useSelector } from "react-redux"; // if you need auth token
+
+// grab your token from Redux/AsyncStorage
+const token = userObj?.token; // <-- ensure this exists on mobile
+
+const handleDownloadClick = async (propertyId: string | number) => {
+  setShowLoader(true);
+  try {
+    if (Platform.OS === "web") {
+      const res = await http.get(DOOR_INSPECTION_API, {
+        params: { propertyId },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `${propertyId}.pdf`; document.body.appendChild(a);
+      a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
+    // RN (protected endpoint): pass the token explicitly
+    const targetPath = FileSystem.documentDirectory + `${propertyId}.pdf`;
+    const url = http.getUri({ url: DOOR_INSPECTION_API, params: { propertyId } });
+
+    const downloader = FileSystem.createDownloadResumable(
+      url,
+      targetPath,
+      { headers: { Authorization: `Bearer ${token}` } } // <-- critical
+    );
+
+    const result = await downloader.downloadAsync();
+    if (!result?.uri) throw new Error("Download failed.");
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(result.uri, {
+        mimeType: "application/pdf",
+        dialogTitle: `${propertyId}.pdf`,
+        UTI: "com.adobe.pdf",
+      });
+    } else {
+      await Linking.openURL(result.uri);
+    }
+  } catch (e:any) {
+    console.error(e);
+    Alert.alert("Download Failed", e?.message ?? "Please try again.");
+  } finally {
+    setShowLoader(false);
+  }
+};
+
+
+  async function openOrShare(uri: string, name: string) {
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/pdf",
+        dialogTitle: name,
+        UTI: "com.adobe.pdf", // iOS hint
+      });
+    } else {
+      await Linking.openURL(uri);
+    }
+  }
 
   const formatDate = (dateStr: string): string => {
     return new Date(dateStr).toLocaleDateString();
@@ -217,7 +227,7 @@ useEffect(() => {
     switch (status) {
       case "In Review":
         return "50%";
-        case "In Progress":
+      case "In Progress":
         return "50%";
       case "Submitted for Approval":
         return "75%";
@@ -230,8 +240,6 @@ useEffect(() => {
         return "0%";
     }
   };
-
-
 
   return (
     <View style={styles.cardWithLine}>
@@ -283,9 +291,9 @@ useEffect(() => {
                             backgroundColor:
                               status === "Completed"
                                 ? "green"
-                                // : status === "In Review"
+                                : // : status === "In Review"
                                 // ? "#f0ad4e" // orange
-                                 : status === "In Progress"
+                                status === "In Progress"
                                 ? "#f0ad4e" // orange
                                 : status === "Submitted for Approval"
                                 ? "#007bff" // blue
@@ -323,20 +331,19 @@ useEffect(() => {
                   </TouchableOpacity>
                 )}
 
-               {showDownloadIcon && (
-  <TouchableOpacity
-    onPress={() => handleDownloadClick(propertyId)}
-    disabled={showLoader}
-    style={{ marginLeft: 10 }}
-  >
-    {showLoader ? (
-      <ActivityIndicator size="small" color="black" />
-    ) : (
-      <Icon name="download" size={20} color="black" />
-    )}
-  </TouchableOpacity>
-)}
-
+                {showDownloadIcon && (
+                  <TouchableOpacity
+                    onPress={() => handleDownloadClick(propertyId)}
+                    disabled={showLoader}
+                    style={{ marginLeft: 10 }}
+                  >
+                    {showLoader ? (
+                      <ActivityIndicator size="small" color="black" />
+                    ) : (
+                      <Icon name="download" size={20} color="black" />
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>
@@ -345,8 +352,6 @@ useEffect(() => {
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   cardWithLine: {
@@ -499,6 +504,5 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 });
-
 
 export default PropertyTile;

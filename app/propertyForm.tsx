@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   SafeAreaView,
   StyleSheet,
@@ -11,7 +12,6 @@ import {
   View,
 } from "react-native";
 
-import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useSelector } from "react-redux";
@@ -21,7 +21,7 @@ import {
 } from "../components/api/apiPath";
 import http from "../components/api/server";
 import Footer from "../components/common/Footer";
-import Header from "../components/common/Header";
+// import Header from "../components/common/Header";
 
 import PropertyTile from "../components/common/PropertyTile";
 import { RootState } from "../components/slices/store";
@@ -33,6 +33,8 @@ type PropertyItem = {
 
 const PropertyForm = () => {
   const [propertyData, setPropertyData] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,37 +107,18 @@ const PropertyForm = () => {
   const gotoDashboard = () => {
     navigation.navigate("Survey"); // Change this to your actual route
   };
-
-  const handleScanDoor = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
-    if (!permissionResult.granted) {
-      alert("Camera permission is required!");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false,
-      quality: 1,
-      base64: false,
-    });
-
-    if (!result.canceled && result.assets?.length > 0) {
-      const photo = result.assets[0];
-      console.log("Scanned image URI:", photo.uri);
-      // TODO: Use the photo (send to API, display preview, etc.)
-    }
-  };
-
-  const headerMemo = useMemo(
+const handleScanDoor = () => {
+  router.push("/qr-scanner" as never); // ✅ not navigation.navigate("QRScanner")
+};
+ const headerMemo = useMemo(
     () => (
       <>
-        <Header
+        {/* <Header
           hideSidebar={false}
           setHideSidebar={function (value: boolean): void {
             throw new Error("Function not implemented.");
           }}
-        />
+        /> */}
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.scanButton} onPress={handleScanDoor}>
             <MaterialCommunityIcons
@@ -207,8 +190,12 @@ const PropertyForm = () => {
     );
   }
 
+  
   return (
     <SafeAreaView style={styles.container}>
+       {loading ? (
+                        <ActivityIndicator size="large" color="black" />
+                      ) : (
       <FlatList<PropertyItem>
         data={propertyData}
         keyExtractor={(
@@ -232,6 +219,7 @@ const PropertyForm = () => {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }}
         keyboardShouldPersistTaps="handled"
       />
+                      )}
     </SafeAreaView>
   );
 };

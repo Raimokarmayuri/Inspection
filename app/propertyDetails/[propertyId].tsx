@@ -5,15 +5,17 @@ import {
   ActivityIndicator,
   Alert,
   Button,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { Buffer } from "buffer";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useSelector } from "react-redux";
@@ -30,7 +32,7 @@ import DataGridTable from "../../components/common/DataGridTable"; // adjust pat
 import Footer from "../../components/common/Footer";
 import { Statuses, UserRoles } from "../../components/common/constants";
 
-import Header from "@/components/common/Header";
+// import Header from "@/components/common/Header";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/FontAwesome"; // or Feather, MaterialIcons, etc.
 
@@ -44,7 +46,9 @@ const PropertyDetailsScreen = () => {
   const itemsPerPage = 4;
 
   const [showLoader, setShowLoader] = useState(false);
-
+ // ✅ New states for confirmation modal & submit loader
+  const [showConfirmBox, setShowConfirmBox] = useState(false);
+  const [showSubmitLoader, setShowSubmitLoader] = useState(false);
   //   const { propertyId } = route.params as { propertyId: string };
 
   const { userObj } = useSelector((state: any) => state.user);
@@ -134,83 +138,153 @@ const PropertyDetailsScreen = () => {
     currentPage * itemsPerPage
   );
 
-  // const totalPages = Math.ceil(
-  //   complianceData?.doorComplianceDetails?.length / itemsPerPage
-  // );
 
-  const submitForApproval = async () => {
+
+
+  // const submitForApproval = async () => {
+  //   try {
+  //     await http.put(
+  //       `${UPDATE_PROPERTY_USER_MAPPING_STATUS}${propertyUserRoleMappingId}`,
+  //       {
+  //         propertyUserRoleMappingId,
+  //         status: Statuses.COMPLETED,
+  //         propertyMasterId: propertyId,
+  //       }
+  //     );
+  //     Alert.alert("Success", "Survey submitted for approval");
+  //     navigation.goBack();
+  //   } catch (err) {
+  //     Alert.alert("Error", "Submission failed");
+  //   }
+  // };
+
+   // 📌 From your JS code
+  const onSubmitForApproval = () => {
+    setShowConfirmBox(true);
+  };
+
+  const UpdateStatus = async () => {
+    if (!propertyUserRoleMappingId) return;
+
+    setShowSubmitLoader(true);
+    const payload = {
+      propertyUserRoleMappingId,
+      status: Statuses.COMPLETED,
+      propertyMasterId: propertyId,
+      userId: userObj?.userId,
+      email: userObj?.userEmail,
+    };
+
     try {
-      await http.put(
+      const response = await http.put(
         `${UPDATE_PROPERTY_USER_MAPPING_STATUS}${propertyUserRoleMappingId}`,
-        {
-          propertyUserRoleMappingId,
-          status: Statuses.COMPLETED,
-          propertyMasterId: propertyId,
-        }
+        payload
       );
-      Alert.alert("Success", "Survey submitted for approval");
-      navigation.goBack();
-    } catch (err) {
-      Alert.alert("Error", "Submission failed");
+
+      if (response.status === 200) {
+        Alert.alert("Success", "Survey has been submitted for approval");
+      } else {
+        Alert.alert("Error", "Error in saving data, please try again");
+      }
+
+      setShowConfirmBox(false);
+      setTimeout(() => {
+        // refresh screen
+        navigation.goBack();
+      }, 3000);
+    } catch (error) {
+      console.error("API Error:", error);
+      Alert.alert("Error", "Something went wrong while submitting");
+    } finally {
+      setShowSubmitLoader(false);
     }
   };
 
-  
-// const handleDownload = async () => {
-//   setShowLoader(true); // Show loader
-//   try {
-//     const res = await http.get(DOOR_INSPECTION_API, {
-//       params: { propertyId },
-//       responseType: "blob",
-//     });
+  const handleCancel = () => {
+    setShowConfirmBox(false);
+  };
 
-//     const file = new Blob([res.data], { type: "application/pdf" });
-//     const fileURL = URL.createObjectURL(file);
-//     Linking.openURL(fileURL); // Open in browser or PDF viewer
-//   } catch (err) {
-//     Alert.alert("Error", "Failed to download PDF");
-//   } finally {
-//     setShowLoader(false); // Hide loader after completion
-//   }
-// };
+  //  const isInspector = userRole === UserRoles.INSPECTOR;
+  // const isAssigned = !!propertyUserRoleMappingId;
+  // const hasInspectorCompleted = inspectorInspectionStatus === Statuses.COMPLETED;
+  // const isInspectorPending = inspectorInspectionStatus !== Statuses.COMPLETED;
+  // const isPropertyCompleted =
+  //   complianceData?.propertyStatus === Statuses.COMPLETED ||
+  //   propertyInfo?.status === Statuses.COMPLETED;
 
-const handleDownload = async () => {
+  // const canSubmitForApproval =
+  //   isInspector && isAssigned && isInspectorPending && !isPropertyCompleted;
+
+  if (loading) {
+    return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
+  }
+
+
+  // const handleDownload = async () => {
+  //   setShowLoader(true); // Show loader
+  //   try {
+  //     const res = await http.get(DOOR_INSPECTION_API, {
+  //       params: { propertyId },
+  //       responseType: "blob",
+  //     });
+
+  //     const file = new Blob([res.data], { type: "application/pdf" });
+  //     const fileURL = URL.createObjectURL(file);
+  //     Linking.openURL(fileURL); // Open in browser or PDF viewer
+  //   } catch (err) {
+  //     Alert.alert("Error", "Failed to download PDF");
+  //   } finally {
+  //     setShowLoader(false); // Hide loader after completion
+  //   }
+  // };
+
+ const handleDownload = async () => {
   setShowLoader(true);
   try {
-    const res = await http.get(DOOR_INSPECTION_API, {
-      params: { propertyId },
-      responseType: "blob",
-    });
-
-    const file = new Blob([res.data], { type: "application/pdf" });
-    const fileURL = URL.createObjectURL(file);
-
     if (Platform.OS === "web") {
+      // Web: keep Blob + anchor
+      const res = await http.get(DOOR_INSPECTION_API, {
+        params: { propertyId },
+        responseType: "blob",
+      });
+
+      const file = new Blob([res.data], { type: "application/pdf" });
+      const fileURL = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = fileURL;
       link.download = `${propertyId}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(fileURL);
+      return;
+    }
+
+    // React Native: request as arraybuffer and convert to base64
+    const res = await http.get(DOOR_INSPECTION_API, {
+      params: { propertyId },
+      responseType: "arraybuffer",
+    });
+
+    const base64 = Buffer.from(res.data, "binary").toString("base64");
+    const fileUri = `${FileSystem.documentDirectory}${propertyId}.pdf`;
+
+    await FileSystem.writeAsStringAsync(fileUri, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "application/pdf",
+        dialogTitle: `Share ${propertyId}.pdf`,
+        UTI: "com.adobe.pdf",
+      });
     } else {
-      const path = `${FileSystem.documentDirectory}${propertyId}.pdf`;
-      const reader = new FileReader();
-
-      reader.onload = async () => {
-        if (typeof reader.result === "string") {
-          const base64 = reader.result.split(",")[1];
-          if (base64) {
-            await FileSystem.writeAsStringAsync(path, base64, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            await Sharing.shareAsync(path);
-          }
-        } else {
-          console.error("Expected base64 string, got ArrayBuffer");
-        }
-      };
-
-      reader.readAsDataURL(file);
+      Alert.alert(
+        "Saved",
+        `PDF saved to app storage.\nPath:\n${fileUri}\n\nUse a file manager to access it.`
+      );
     }
   } catch (err) {
     console.error("Download error", err);
@@ -219,6 +293,39 @@ const handleDownload = async () => {
     setShowLoader(false);
   }
 };
+
+// ---- Status helpers (single source of truth) ----
+const isPropertyCompleted =
+  complianceData?.propertyStatus === Statuses.COMPLETED ||
+  propertyInfo?.status === Statuses.COMPLETED;
+
+const isPropertyInProgress =
+  complianceData?.propertyStatus === Statuses.INREVIEW ||
+  propertyInfo?.status === Statuses.INREVIEW;
+
+const isInspector = userRole === UserRoles.INSPECTOR;
+const isAssigned = !!propertyUserRoleMappingId;
+const hasInspectorCompleted = inspectorInspectionStatus === Statuses.COMPLETED;
+
+// If you have a "SUBMITTED/INREVIEW" per-inspector status, add it here.
+// Otherwise we just rely on "not COMPLETED" as the condition to show the button.
+const isInspectorPending = inspectorInspectionStatus !== Statuses.COMPLETED;
+
+// ---- Final booleans ----
+// Show when: inspector, assigned, not completed yet, and the whole property isn’t already completed
+const canSubmitForApproval =
+  isInspector && isAssigned && isInspectorPending && !isPropertyCompleted;
+
+// From previous message (reuse for download)
+const canAdminOrApproverDownload =
+  (userRole === UserRoles.ADMIN || userRole === UserRoles.APPROVER) && isPropertyCompleted;
+
+const canInspectorDownload =
+  isInspector && hasInspectorCompleted; // only after they’ve completed their part
+
+const canDownload = canAdminOrApproverDownload || canInspectorDownload;
+
+
   if (loading)
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
 
@@ -226,14 +333,13 @@ const handleDownload = async () => {
     <>
       <SafeAreaView style={styles.container}>
         <ScrollView>
+          {/* <Header
+            hideSidebar={false}
+            setHideSidebar={function (value: boolean): void {
+              throw new Error("Function not implemented.");
+            }}
+          /> */}
 
-          <Header
-                    hideSidebar={false}
-                    setHideSidebar={function (value: boolean): void {
-                      throw new Error("Function not implemented.");
-                    }}
-                  />
-                  
           {/* {(userRole === UserRoles.ADMIN || userRole === UserRoles.APPROVER) &&
             propertyInfo?.status === Statuses.COMPLETED && (
               <TouchableOpacity
@@ -288,42 +394,42 @@ const handleDownload = async () => {
           <Text><Text style={styles.bold}>Approval Date:</Text> {new Date(complianceData?.approvalDate).toLocaleDateString()}</Text>
         )} */}
 
-            {(userRole === UserRoles.ADMIN ||
-  userRole === UserRoles.APPROVER) &&
-  propertyInfo?.status === Statuses.COMPLETED && (
-    <TouchableOpacity
-      style={{
-        flexDirection: "row",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        backgroundColor: "#ffffff",
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: 6,
-        marginTop: 10,
-        marginBottom: 10,
-      }}
-      onPress={handleDownload}
-      disabled={showLoader}
-    >
-      {showLoader ? (
-        <ActivityIndicator size="small" color="blue" />
-      ) : (
-        <>
-          <Icon
-            name="download"
-            size={20}
-            color="blue"
-            style={{ marginRight: 8 }}
-          />
-          {/* <Text style={{ color: "blue", fontSize: 16 }}>
+            {/* {(userRole === UserRoles.ADMIN ||
+              userRole === UserRoles.APPROVER) &&
+              propertyInfo?.status === Statuses.COMPLETED && ( */}
+              {canDownload && (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "flex-end",
+                    alignItems: "center",
+                    backgroundColor: "#ffffff",
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 6,
+                    marginTop: 10,
+                    marginBottom: 10,
+                  }}
+                  onPress={handleDownload}
+                  disabled={showLoader}
+                >
+                  {showLoader ? (
+                    <ActivityIndicator size="small" color="blue" />
+                  ) : (
+                    <>
+                      <Icon
+                        name="download"
+                        size={20}
+                        color="blue"
+                        style={{ marginRight: 8 }}
+                      />
+                      {/* <Text style={{ color: "blue", fontSize: 16 }}>
             Download Report
           </Text> */}
-        </>
-      )}
-    </TouchableOpacity>
-)}
-
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
           </View>
           <ScrollView style={styles.container}>
             <View style={styles.card}>
@@ -470,13 +576,11 @@ const handleDownload = async () => {
               )}
             </View>
 
-            {userRole === UserRoles.INSPECTOR &&
-              inspectorInspectionStatus !== Statuses.COMPLETED && (
-                <Button
-                  title="Submit for Approval"
-                  onPress={submitForApproval}
-                />
-              )}
+            {/* {userRole === UserRoles.INSPECTOR &&
+              inspectorInspectionStatus !== Statuses.COMPLETED && ( */}
+               {canSubmitForApproval && (
+          <Button title="Submit for Approval" onPress={onSubmitForApproval} />
+        )}
 
             <TouchableOpacity
               onPress={() => navigation.goBack()}
@@ -514,7 +618,29 @@ const handleDownload = async () => {
           onPress={() => navigation.goBack()}
         />
       </View> */}
-
+  {/* ✅ Confirmation Modal */}
+        <Modal visible={showConfirmBox} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
+                Are you sure you want to submit for approval?
+              </Text>
+              {showSubmitLoader ? (
+                <ActivityIndicator size="large" color="blue" />
+              ) : (
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity style={styles.modalButton} onPress={UpdateStatus}>
+                    <Text style={styles.modalButtonText}>Yes</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.modalButton, { backgroundColor: "grey" }]} onPress={handleCancel}>
+                    <Text style={styles.modalButtonText}>No</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+        
           <Footer />
         </ScrollView>
       </SafeAreaView>
@@ -530,6 +656,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#f2f2f2",
     flex: 1,
   },
+  // container: { flex: 1, paddingHorizontal: 16, paddingTop: 16, backgroundColor: "#f2f2f2" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  modalContainer: { width: "80%", backgroundColor: "white", padding: 20, borderRadius: 8 },
+  modalButtonRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 20 },
+  modalButton: { backgroundColor: "#007bff", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6 },
+  modalButtonText: { color: "white", fontSize: 16 },
   card: {
     backgroundColor: "#fff",
     borderRadius: 8,
