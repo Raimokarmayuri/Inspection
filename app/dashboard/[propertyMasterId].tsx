@@ -590,8 +590,8 @@ const Dashboard = () => {
 
     // Merge (and de-dupe just in case)
     const next = Array.from(new Set([...prev, ...uploaded]));
-  setActionImages(prev => ({ ...prev, [field]: next }));
-  setFormData(prev => ({ ...prev, [`${field}Images`]: next }));
+    setActionImages((prev) => ({ ...prev, [field]: next }));
+    setFormData((prev) => ({ ...prev, [`${field}Images`]: next }));
     // setActionImages((prevMap) => ({ ...prevMap, [field]: next }));
 
     // (Optional) also mirror into formData so MiniCapture re-renders from it too
@@ -1698,69 +1698,124 @@ const Dashboard = () => {
           </View>
         ))}
 
+        {/* === Compliance Check (MiniCapture shows when value is FALSE) === */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Compliance Check</Text>
+  <Text style={styles.sectionTitle}>Compliance Check</Text>
 
-          {(() => {
-            type ComplianceKey =
-              | "intumescentStrips"
-              | "coldSmokeSeals"
-              | "selfClosingDevice"
-              | "fireLockedSign"
-              | "fireShutSign"
-              | "holdOpenDevice"
-              | "visibleCertification"
-              | "doorGlazing"
-              | "pyroGlazing";
-            const complianceItems: {
-              key: ComplianceKey;
-              label: string;
-              show?: boolean;
-            }[] = [
-              {
-                key: "intumescentStrips",
-                label: "Are there intumescent strips?",
-              },
-              {
-                key: "coldSmokeSeals",
-                label: "Are there cold smoke seals?",
-                show:
-                  formData.fireResistance === "5" ||
-                  formData.fireResistance === "6" ||
-                  formData.fireResistance === "7",
-              },
-              { key: "selfClosingDevice", label: "Self closing device?" },
-              { key: "fireLockedSign", label: "Fire door Keep Locked sign?" },
-              { key: "fireShutSign", label: "Fire door Keep Shut sign?" },
-              { key: "holdOpenDevice", label: "Is there a hold open device?" },
-              {
-                key: "visibleCertification",
-                label: "Is certification visible on fire door?",
-              },
-              { key: "doorGlazing", label: "Does the door contain glazing?" },
-              {
-                key: "pyroGlazing",
-                label: "Is glazing pyro glazing?",
-                show: isGlazing,
-              },
-            ];
-            return complianceItems
-              .filter((item) => item.show === undefined || item.show)
-              .map(({ key, label }) => (
-                <View key={key} style={styles.complianceRow}>
-                  <Text style={styles.label}>{label}</Text>
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>N</Text>
-                    <Switch
-                      value={!!complianceCheck[key]}
-                      onValueChange={(val) => handleComplianceToggle(key, val)}
-                    />
-                    <Text style={styles.switchLabel}>Y</Text>
-                  </View>
-                </View>
-              ));
-          })()}
-        </View>
+  {(() => {
+    type ComplianceKey =
+      | "intumescentStrips"
+      | "coldSmokeSeals"
+      | "selfClosingDevice"
+      | "fireLockedSign"
+      | "fireShutSign"
+      | "holdOpenDevice"
+      | "visibleCertification"
+      | "doorGlazing"
+      | "pyroGlazing";
+
+    const miniEnabled: ComplianceKey[] = [
+      "intumescentStrips",
+      "coldSmokeSeals",
+      "fireLockedSign",
+      "fireShutSign",
+      "pyroGlazing",
+    ];
+
+    let showFireLockedSign =
+      complianceCheck["selfClosingDevice"] === false; // rule 1
+
+    let showPyroGlazing =
+      complianceCheck["doorGlazing"] === true && isGlazing; // rule 2
+
+    const items: { key: ComplianceKey; label: string; show?: boolean }[] = [
+      { key: "intumescentStrips", label: "Are there intumescent strips?" },
+      {
+        key: "coldSmokeSeals",
+        label: "Are there cold smoke seals?",
+        show:
+          formData.fireResistance === "5" ||
+          formData.fireResistance === "6" ||
+          formData.fireResistance === "7",
+      },
+      { key: "selfClosingDevice", label: "Self closing device?" },
+      {
+        key: "fireLockedSign",
+        label: "Fire door Keep Locked sign?",
+        show: showFireLockedSign,
+      },
+      { key: "fireShutSign", label: "Fire door Keep Shut sign?" },
+      { key: "holdOpenDevice", label: "Is there a hold open device?" },
+      {
+        key: "visibleCertification",
+        label: "Is certification visible on fire door?",
+      },
+      { key: "doorGlazing", label: "Does the door contain glazing?",
+        // show: showPyroGlazing,
+       },
+      {
+        key: "pyroGlazing",
+        label: "Is glazing pyro glazing?",
+        show: showPyroGlazing,
+      },
+    ];
+
+    return items
+      .filter((i) => i.show === undefined || i.show)
+      .map(({ key, label, show }) => {
+        const allowedByShowFlag = show === undefined || show;
+        const showMini =
+          miniEnabled.includes(key) &&
+          allowedByShowFlag &&
+          complianceCheck[key] === false;
+
+        return (
+          <View key={key} style={{ marginBottom: 16 }}>
+            <View style={styles.complianceRow}>
+              <Text style={styles.label}>{label}</Text>
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>N</Text>
+                <Switch
+                  value={!!complianceCheck[key]}
+                  onValueChange={(val) => handleComplianceToggle(key, val)}
+                />
+                <Text style={styles.switchLabel}>Y</Text>
+              </View>
+            </View>
+
+            {showMini && (
+              <View style={styles.captureBox}>
+                <MiniCapture
+                  fieldValue={key}
+                  formData={complianceCheck}
+                  savedImages={actionImages[key] || []}
+                  onImagesChange={(images: string[]) =>
+                    handleImagesChangeMini(images, key)
+                  }
+                  onImageDelete={(index: number) =>
+                    handleDeleteImages(index, key)
+                  }
+                  onResetChange={() => handleResetAction(key, "COMPLIANCE")}
+                  onHandleActionFieldsChange={(val: string, fieldName: string) =>
+                    handleActionFieldsChange(
+                      { target: { name: fieldName, value: val } },
+                      key,
+                      "COMPLIANCE"
+                    )
+                  }
+                  reset={resetCaptureFlag}
+                  mandatoryFieldRef={mandatoryFieldRef}
+                  isView={false}
+                  forceShow={true}
+                />
+              </View>
+            )}
+          </View>
+        );
+      });
+  })()}
+</View>
+
 
         <View
           style={{
@@ -1879,8 +1934,6 @@ const Dashboard = () => {
             {submitting ? "Submitting..." : "Submit"}
           </Text>
         </TouchableOpacity>
-
-        
       </View>
 
       {message ? (

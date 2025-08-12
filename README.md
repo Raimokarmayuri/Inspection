@@ -51,3 +51,8 @@ Join our community of developers creating universal apps.
 
 
 npx eas update --branch main [for preview]
+eas update --branch main 
+-m "your message" for same qr 
+get qr from link
+https://qr.expo.dev/eas-update?projectId=7f6636d0-c8ba-4c8a-b7bb-b93613e3d83f&runtimeVersion=1.0.0&channel=main
+

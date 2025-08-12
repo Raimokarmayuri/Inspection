@@ -395,6 +395,7 @@ interface MiniCaptureProps {
   mandatoryFieldRef: React.MutableRefObject<Record<string, TextInput | null>>;
   /** Parent can force visibility (e.g., when value > 3.0) */
   forceShow?: boolean;
+  showErrors?: boolean;
 }
 
 const severityMap: Record<string, string> = {
@@ -451,6 +452,7 @@ const MiniCapture = ({
   reset,
   mandatoryFieldRef,
   forceShow,
+  showErrors,
 }: MiniCaptureProps) => {
   const editable = !isView;
 
@@ -490,6 +492,14 @@ const MiniCapture = ({
     ? hasSavedSeverity || hasImages
     : (forceShow ?? false) || overThreshold || hasSavedSeverity || hasImages;
 
+      // 🔎 Inline validation flags (shown only when showErrors && !isView)
+  const mustShowErrors = showErrors && !isView && shouldShow;
+  const sevError = mustShowErrors && !sev ? "Severity is required" : "";
+  const catError = mustShowErrors && !cat ? "Category is required" : "";
+  const dueError = mustShowErrors && !due ? "Due date is required" : "";
+  const remError =
+       mustShowErrors && cat !== "5" && !rem.trim() ? "Remediation is required" : "";
+
   if (!shouldShow) return null;
 
   return (
@@ -501,6 +511,7 @@ const MiniCapture = ({
       {isView ? (
         <Text style={styles.readOnly}>{severityMap[sev] || "—"}</Text>
       ) : (
+        <>
         <View style={[styles.pickerWrap, styles.touchFix]} pointerEvents="auto">
           <Picker
             key={`sev-${fieldValue}-edit`}
@@ -523,6 +534,9 @@ const MiniCapture = ({
             <Picker.Item label="Low" value="4" color="#034694" />
           </Picker>
         </View>
+                  {!!sevError && <Text style={styles.errorText}>{sevError}</Text>}
+                  </>
+
       )}
 
       {/* Category + Due Date */}
@@ -534,6 +548,7 @@ const MiniCapture = ({
           {isView ? (
             <Text style={styles.readOnly}>{categoryMap[cat] || "—"}</Text>
           ) : (
+            <>
             <View
               style={[styles.pickerWrap, styles.touchFix]}
               pointerEvents="auto"
@@ -557,6 +572,8 @@ const MiniCapture = ({
                 <Picker.Item label="Door Replacement required" value="5" color="#034694" />
               </Picker>
             </View>
+             {!!catError && <Text style={styles.errorText}>{catError}</Text>}
+            </>
           )}
         </View>
 
@@ -565,6 +582,8 @@ const MiniCapture = ({
             Due Date <Text style={{ color: "red" }}>*</Text>
           </Text>
           <Text style={styles.readOnly}>{due || "—"}</Text>
+                    {!!dueError && !isView && <Text style={styles.errorText}>{dueError}</Text>}
+
         </View>
       </View>
 
@@ -577,12 +596,16 @@ const MiniCapture = ({
           {isView ? (
             <Text style={styles.readOnly}>{rem || "—"}</Text>
           ) : (
+            <>
             <TextInput
               style={styles.input}
               value={rem}
               onChangeText={(t) => onHandleActionFieldsChange(t, "Remediation")}
               editable={editable}
             />
+                          {!!remError && <Text style={styles.errorText}>{remError}</Text>}
+
+</>
           )}
         </View>
       )}
@@ -626,6 +649,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
+  },
+   errorText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#d32f2f",
   },
   label: { marginTop: 8, marginBottom: 4, fontWeight: "600", color: "#034694" },
   smallLabel: {
