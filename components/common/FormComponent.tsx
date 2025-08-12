@@ -69,6 +69,7 @@ interface FormProps {
 
   handleValidationOnSave: (status: string) => void;
 }
+
 const severityMap: Record<string, string> = {
   "1": "Critical",
   "2": "High",
