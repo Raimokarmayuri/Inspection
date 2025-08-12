@@ -1,20 +1,14 @@
 // MiniCapture.tsx
 import { Picker } from "@react-native-picker/picker";
 import React, { useMemo } from "react";
-import {
-  Image,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
+// adjust the path to wherever Capture lives
+import Capture from "./Capture";
 
 interface MiniCaptureProps {
   isView: boolean;
   savedImages: string[];
-  fieldValue: string; // e.g., "head", "hinge"
+  fieldValue: string;
   formData: Record<string, any>;
   onImagesChange: (images: string[], file?: string) => void;
   onResetChange: () => void;
@@ -25,8 +19,17 @@ interface MiniCaptureProps {
   onImageDelete: (index: number) => void;
   reset: boolean;
   mandatoryFieldRef: React.MutableRefObject<Record<string, TextInput | null>>;
+  /** NEW: parent can force visibility (e.g., when value > 3.0) */
+  forceShow?: boolean;
 }
 
+// Optional: if you already have this helper elsewhere, reuse it
+async function normaliseForUpload(uri: string, field: string) {
+  // very basic mime guess; feel free to use your existing implementation
+  const name = `${field}_Image_${Date.now()}.jpg`;
+  const type = "image/jpeg";
+  return { uri, name, type };
+}
 const severityMap: Record<string, string> = {
   "": "Select",
   "1": "Critical",
@@ -42,8 +45,6 @@ const categoryMap: Record<string, string> = {
   "4": "Testing, Records, Log Book",
   "5": "Door Replacement required",
 };
-
-// MiniCapture.tsx (only relevant changes shown)
 
 // helper inside MiniCapture (top-level in the component file is fine)
 const getSeverityDate = (severityValue: string) => {
@@ -80,6 +81,8 @@ const MiniCapture = ({
   onHandleActionFieldsChange,
   onImageDelete,
   reset,
+  mandatoryFieldRef,
+  forceShow,
 }: MiniCaptureProps) => {
   const editable = !isView;
 
@@ -108,11 +111,13 @@ const MiniCapture = ({
   // visibility:
   // - view: show if severity saved
   // - edit: show if measurement >= 4 OR severity saved
-  const hasSavedSeverity = !!sev;
+  const hasSavedSeverity = !!sev && sev !== "Select";
+  const hasImages = (savedImages?.length ?? 0) > 0;
+
+  // EDIT THIS:
   const shouldShow = isView
-    ? hasSavedSeverity
-    : (Number.isFinite(measurementVal) && measurementVal >= 4) ||
-      hasSavedSeverity;
+    ? hasSavedSeverity || hasImages
+    : (forceShow ?? false) || hasSavedSeverity || hasImages;
 
   if (!shouldShow) return null;
 
@@ -152,7 +157,7 @@ const MiniCapture = ({
       )}
 
       {/* Category + Due Date */}
-      <View >
+      <View>
         <View style={{ flex: 2 }}>
           <Text style={styles.smallLabel}>
             Category <Text style={{ color: "red" }}>*</Text>
@@ -213,8 +218,9 @@ const MiniCapture = ({
       </View>
 
       {/* Remediation (hidden when Category = 5) */}
+
       {cat !== "5" && (
-        <>
+       <View style={{ flex: 1 }}>
           <Text style={styles.label}>
             Remedial/Action required <Text style={{ color: "red" }}>*</Text>
           </Text>
@@ -228,7 +234,7 @@ const MiniCapture = ({
               editable={editable}
             />
           )}
-        </>
+        </View>
       )}
 
       {/* Comments */}
@@ -245,8 +251,46 @@ const MiniCapture = ({
         />
       )}
 
+      {/* Photo capture (use shared Capture component) */}
+      {/* {!isView && shouldShow && (
+  <View style={{ marginTop: 8 }}>
+    <Text style={styles.label}>Photo </Text>
+    <Capture
+      onImagesChange={(images) => onImagesChange(images, fieldValue)}
+      reset={reset}
+      onImageDelete={(index) => onImageDelete(index)}
+      fieldValue={fieldValue}
+      singleImageCapture={false}
+      isView={false}                    // ❌ always false
+      savedImages={savedImages || []}
+      mandatoryFieldRef={mandatoryFieldRef}
+      allowGallery={true}
+    />
+  </View>
+)} */}
+
+      {/* Photo evidence (show in edit + view) */}
+
+      {shouldShow && (
+        <View style={{ marginTop: 8 }}>
+          <Text style={styles.label}>Photo </Text>
+
+          <Capture
+            isView={isView}
+            savedImages={savedImages || []}
+            onImagesChange={(images) => onImagesChange(images, fieldValue)}
+            reset={reset}
+            onImageDelete={(index) => onImageDelete(index)}
+            mandatoryFieldRef={mandatoryFieldRef}
+            fieldValue={fieldValue} // ✅ consistent key
+            singleImageCapture={false}
+            allowGallery
+          />
+        </View>
+      )}
+
       {/* Images */}
-      {savedImages.length > 0 && (
+      {/* {savedImages.length > 0 && (
         <View style={styles.imageRow}>
           {savedImages.map((img, i) => (
             <View key={i} style={styles.imageWrapper}>
@@ -259,7 +303,7 @@ const MiniCapture = ({
             </View>
           ))}
         </View>
-      )}
+      )} */}
     </View>
   );
 };

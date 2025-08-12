@@ -93,6 +93,10 @@ const fireRatingMap: Record<string, string> = {
   "7": "FD90S",
   "8": "FD120S",
 };
+
+const mergeImages = (a?: string[], b?: string[]) =>
+  Array.from(new Set([...(a ?? []), ...(b ?? [])]));
+
 const getDoorTypeName = (
   id?: string | number,
   opts?: { doorTypeId: number; doorTypeName: string }[]
@@ -141,15 +145,25 @@ const FormComponent: React.FC<FormProps> = ({
     return Number.isFinite(n) ? n : NaN;
   };
 
+  // put this helper near the top of FormComponent
+  const savedFor = (field: string) =>
+    mergeImages(
+      (formData as any)?.[`${field}Images`] as string[] | undefined,
+      actionImages?.[field] as string[] | undefined
+    );
+
   const hasActionDataFor = (field: string) => {
     const fd = formData as any;
+    const fdImgs = (fd[`${field}Images`] as string[] | undefined) ?? [];
+    const actImgs = actionImages?.[field] ?? [];
     return Boolean(
       fd[`${field}Severity`] ||
         fd[`${field}Category`] ||
         fd[`${field}Remediation`] ||
         fd[`${field}Comments`] ||
-        fd[`${field}DueDate`]
-      // (actionImages?.[field]?.length > 0)
+        fd[`${field}DueDate`] ||
+        fdImgs.length > 0 || // ✅ consider images from formData
+        actImgs.length > 0 // ✅ and images captured this session
     );
   };
 
@@ -330,13 +344,14 @@ const FormComponent: React.FC<FormProps> = ({
           </View>
 
           {/* ✅ ALWAYS show MiniCapture */}
+
           {shouldShowMini("head") && (
             <MiniCapture
               key={`mc-${isView ? "view" : "edit"}-head`}
               isView={isView}
               fieldValue="head"
               formData={formData}
-              savedImages={actionImages["head"] ?? []}
+              savedImages={savedFor("head")}
               onImagesChange={(images) =>
                 handleImagesChangeMini(images, "head")
               }
@@ -420,7 +435,8 @@ const FormComponent: React.FC<FormProps> = ({
                   isView={isView}
                   fieldValue={field}
                   formData={formData}
-                  savedImages={actionImages[field] ?? []}
+                  //  savedImages={savedFor("head")}
+                  savedImages={savedFor(field)} // ⬅️ merged images here
                   onImagesChange={(images) =>
                     handleImagesChangeMini(images, field)
                   }

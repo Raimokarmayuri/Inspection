@@ -87,6 +87,9 @@ const Dashboard = () => {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [highlightDoor, setHighlightDoor] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const scrollRef = useRef<ScrollView>(null);
+  // const mandatoryFieldRef = useRef<Record<string, any>>({}); // you’re already using this
 
   // const [actionImages, setActionImages] = useState<{
   //   [key: string]: { url: string; name: string }[];
@@ -159,7 +162,20 @@ const Dashboard = () => {
     compliance: string;
     doorPhoto: string[];
   };
+  const isEmpty = (v: any) =>
+    v === undefined ||
+    v === null ||
+    (typeof v === "string" && v.trim() === "") ||
+    (Array.isArray(v) && v.length === 0);
 
+  // mark the first failing field
+  const focusFirstError = (errs: Record<string, string>) => {
+    const firstKey = Object.keys(errs)[0];
+    const el = mandatoryFieldRef.current[firstKey];
+    if (el?.focus) el.focus();
+    // optional: scroll to it if needed
+    // scrollRef.current?.scrollTo({ y: <y-position>, animated: true });
+  };
   const [formData, setFormData] = useState<FormData>({
     doorNumber: "",
     doorType: "",
@@ -338,7 +354,7 @@ const Dashboard = () => {
     }
   };
 
-  const BASE_MEASURES: { [key: string]: number } = {
+  const BASE_MEASURES: Record<string, number> = {
     head: 3,
     hinge: 3,
     closing: 3,
@@ -441,33 +457,116 @@ const Dashboard = () => {
   };
 
   const handleGapsChange = (name: string, value: string) => {
-    resetIndividualField(name); // currently a placeholder
+    resetIndividualField(name);
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    // keep text as typed
+    setFormData((prev) => ({ ...prev, [name]: value }));
 
-    const numericValue = parseFloat(value);
-    const threshold = BASE_MEASURES[name];
-
-    if (name === "threshold") {
-      if (formData.fireResistance === "1") {
-        setActionMenuFlag((prev) => ({
-          ...prev,
-          [name]: numericValue < 10,
-        }));
-      } else {
-        setActionMenuFlag((prev) => ({
-          ...prev,
-          [name]: numericValue > threshold,
-        }));
+    const n = Number(value);
+    if (!Number.isFinite(n)) {
+      // turn off when not a number
+      if (actionmenuFlag[name]) {
+        setFormData((f: any) => {
+          const {
+            [`${name}Severity`]: _s,
+            [`${name}Action`]: _a,
+            [`${name}DueDate`]: _d,
+            ...rest
+          } = f;
+          return rest;
+        });
       }
-    } else {
-      setActionMenuFlag((prev) => ({
-        ...prev,
-        [name]: numericValue > threshold,
+      setActionMenuFlag((prev) => ({ ...prev, [name]: false }));
+      return;
+    }
+
+    const base = BASE_MEASURES[name as keyof typeof BASE_MEASURES];
+
+    let show = false;
+    if (name === "threshold") {
+      show =
+        formData.fireResistance === "1"
+          ? n < 10
+          : n > (BASE_MEASURES.threshold ?? 3);
+    } else if (base !== undefined) {
+      show = n > base; // e.g., 3.1 > 3 → true
+    }
+
+    // Initialize action fields on first enable; clear on disable
+    if (show && !actionmenuFlag[name]) {
+      setFormData((f: any) => ({
+        ...f,
+        [`${name}Severity`]: f[`${name}Severity`] ?? "Select",
+        [`${name}Action`]: f[`${name}Action`] ?? "",
+        [`${name}DueDate`]: f[`${name}DueDate`] ?? "",
       }));
+    } else if (!show && actionmenuFlag[name]) {
+      setFormData((f: any) => {
+        const {
+          [`${name}Severity`]: _s,
+          [`${name}Action`]: _a,
+          [`${name}DueDate`]: _d,
+          ...rest
+        } = f;
+        return rest;
+      });
+    }
+
+    setActionMenuFlag((prev) => ({ ...prev, [name]: show }));
+  };
+
+  const uploadImageAPIMini = async (
+    uri: string,
+    field: string,
+    userObj: { token?: string }
+  ): Promise<string> => {
+    try {
+      if (!userObj?.token) {
+        console.warn("No auth token found");
+        return "";
+      }
+
+      let filePart: { uri?: string; name: string; type: string } | File;
+      let name = `${field}_Image_${Date.now()}.jpg`;
+      let type = "image/jpeg";
+
+      if (Platform.OS === "web") {
+        // uri can be data:, blob:, or http(s)
+        const res = await fetch(uri);
+        const blob = await res.blob();
+        type = blob.type || type;
+        filePart = new File([blob], name, { type });
+      } else {
+        const parts = await normaliseForUpload(uri, field);
+        name = parts.name;
+        type = parts.type;
+        filePart = { uri: parts.uri, name, type } as any;
+      }
+
+      const form = new FormData();
+      form.append("File", filePart as any, name);
+      form.append("Client", "ABC");
+      form.append("Property", "Candor");
+      form.append("InspectionDate", new Date().toISOString());
+
+      const resp = await fetch(`${hostName}api/Inspection/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${userObj.token}` },
+        body: form,
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        console.error("Upload failed:", resp.status, text);
+        return "";
+      }
+
+      const data = await resp.json().catch(() => ({} as any));
+      // server returns { result: { blobUrl: "https://..." } }
+      return data?.result?.blobUrl || "";
+    } catch (e) {
+      console.error("uploadImageAPIMini error:", e);
+      return "";
     }
   };
 
@@ -475,13 +574,29 @@ const Dashboard = () => {
     newImages: string[],
     field: string
   ): Promise<void> => {
-    const imgArr = actionImages[field] || [];
-    const combined = [...imgArr, ...newImages];
+    const prev = actionImages[field] || [];
 
-    setActionImages((prev) => ({
-      ...prev,
-      [field]: combined,
-    }));
+    // Only upload items that aren't already server URLs
+    const toUpload = newImages.filter(
+      (u) => !(u.startsWith("http://") || u.startsWith("https://"))
+    );
+    if (toUpload.length === 0) return;
+
+    // Upload each new image using your existing API helper
+    const uploaded = (
+      await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
+    ).filter(Boolean) as string[];
+
+    if (uploaded.length === 0) return;
+
+    // Merge (and de-dupe just in case)
+    const next = Array.from(new Set([...prev, ...uploaded]));
+  setActionImages(prev => ({ ...prev, [field]: next }));
+  setFormData(prev => ({ ...prev, [`${field}Images`]: next }));
+    // setActionImages((prevMap) => ({ ...prevMap, [field]: next }));
+
+    // (Optional) also mirror into formData so MiniCapture re-renders from it too
+    // setFormData((prev: any) => ({ ...prev, [`${field}Images`]: next }));
   };
 
   const handleResetAction = (
@@ -524,7 +639,8 @@ const Dashboard = () => {
   // const mandatoryFieldRef = useRef<Record<string, TextInput | null>>({
   //   hingeLocation: null,
   // });
-  const mandatoryFieldRef = useRef<Record<string, TextInput | null>>({});
+  // const mandatoryFieldRef = useRef<Record<string, TextInput | null>>({});
+  const mandatoryFieldRef = useRef<Record<string, any>>({}); // you’re already using this
 
   const resetIndividualField = (field: string | number) => {
     mandatoryFieldRef.current[field] != null
@@ -684,30 +800,6 @@ const Dashboard = () => {
     }
   };
 
-  //   const handlePrint = () => {
-  //   const printWindow = window.open("", "_blank");
-  //   printWindow.document.write(`
-  //     <html>
-  //       <head>
-  //         <style>
-  //           body { font-family: Arial, sans-serif; }
-  //           .print-container { text-align: center; }
-  //           .modal-header { background-color: gray; color: white; padding: 10px; }
-  //         </style>
-  //       </head>
-  //       <body>
-  //         <div class="print-container" style="margin-top:100px">
-  //           <img src="${qrCode}" alt="QR Code" height='400px' width='400px' />
-  //           <h3>Door Reference Number: ${formData.doorNumber}</h3>
-  //         </div>
-  //       </body>
-  //     </html>
-  //   `);
-  //   printWindow.document.close();
-  //   printWindow.print();
-  //   printWindow.close();
-  // };
-
   const handlePrint = (qrCode: string, formData: { doorNumber: string }) => {
     const printWindow = window.open("", "_blank");
 
@@ -776,13 +868,19 @@ const Dashboard = () => {
     field: string
   ): Promise<string> => {
     try {
-      if (!userObj?.token) {
+      const rawToken = userObj?.token ?? "";
+      if (!rawToken) {
         console.warn("No auth token found in userObj");
         return "";
       }
 
+      // ✅ ensure exactly one "Bearer " prefix
+      const authHeader = rawToken.startsWith("Bearer ")
+        ? rawToken
+        : `Bearer ${rawToken}`;
+
       const latest = newImages[newImages.length - 1];
-      let filePart: { uri?: string; name: string; type: string } | Blob;
+      let filePart: { uri?: string; name: string; type: string } | File | Blob;
       let name = `${field}_Image_${Date.now()}.jpg`;
       let type = "image/jpeg";
 
@@ -790,12 +888,13 @@ const Dashboard = () => {
         const res = await fetch(latest);
         const blob = await res.blob();
         type = blob.type || type;
-        filePart = blob;
+        // Use File on web so the server gets a filename
+        filePart = new File([blob], name, { type });
       } else {
         const parts = await normaliseForUpload(latest, field);
         name = parts.name;
         type = parts.type;
-        filePart = { uri: parts.uri, name, type };
+        filePart = { uri: parts.uri, name, type } as any;
       }
 
       const form = new FormData();
@@ -807,20 +906,27 @@ const Dashboard = () => {
       const resp = await fetch(`${hostName}api/Inspection/upload`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${userObj.token}`,
+          Authorization: authHeader, // ✅
+          // DO NOT set Content-Type manually when sending FormData
         },
         body: form,
+        // credentials: 'include', // only if your API uses cookies (likely not)
       });
 
       if (!resp.ok) {
+        const www = resp.headers.get("www-authenticate") || "";
         const text = await resp.text().catch(() => "");
-        console.error("Upload failed:", resp.status, text);
+        console.error("Upload failed", {
+          status: resp.status,
+          wwwAuthenticate: www,
+          body: text?.slice(0, 300),
+        });
         return "";
       }
 
       const data = await resp.json().catch(() => ({} as any));
       return data?.result?.blobUrl || "";
-    } catch (err: any) {
+    } catch (err) {
       console.error("uploadImageAPI error:", err);
       return "";
     }
@@ -858,6 +964,52 @@ const Dashboard = () => {
         console.warn(`Unhandled image field: ${field}`);
         break;
     }
+  };
+
+  const validateAndSubmit = async () => {
+    const e: Record<string, string> = {};
+
+    // Basic requireds
+    if (isEmpty(basicInfo.floor)) e.floor = "Floor is required";
+    if (isEmpty(formData.doorType)) e.doorType = "Door Type is required";
+    if (isEmpty(formData.doorNumber)) e.doorNumber = "Door Number is required";
+    if (isEmpty(formData.hingeLocation))
+      e.hingeLocation = "Hinge Location is required";
+    if (isEmpty(formData.fireResistance))
+      e.fireResistance = "Fire rating is required";
+
+    // Files / images
+    if (isEmpty(basicInfo.floorPlan))
+      e.floorPlan = "Floor plan file is required";
+    if (isEmpty(formData.doorPhoto)) e.doorPhoto = "Door photo is required";
+
+    // Measurements (add/remove as needed)
+    const reqMeasurements = [
+      "head",
+      "hinge",
+      "closing",
+      "threshold",
+      "doorThickness",
+      "frameDepth",
+      "doorSize",
+      "fullDoorsetSize",
+    ];
+    reqMeasurements.forEach((k) => {
+      if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
+    });
+
+    // Example date required (if you want it mandatory)
+    if (!date) e.date = "Date is required";
+
+    if (Object.keys(e).length) {
+      setErrors(e);
+      focusFirstError(e);
+      return;
+    }
+
+    setErrors({});
+    // proceed with your existing submit
+    handleSubmit();
   };
 
   const handleSubmit = async () => {
@@ -1111,14 +1263,27 @@ const Dashboard = () => {
             editable={false}
           />
 
-          <Text style={styles.label}>Floor*</Text>
+          {/* <Text style={styles.label}>Floor*</Text>
           <TextInput
             style={styles.input}
             value={basicInfo.floor}
             onChangeText={(text) =>
               setBasicInfo((prev) => ({ ...prev, floor: text }))
             }
+          /> */}
+          <Text style={styles.label}>Floor*</Text>
+          <TextInput
+            ref={(ref) => {
+              if (ref) mandatoryFieldRef.current.floor = ref;
+            }}
+            // ref={(r) => (mandatoryFieldRef.current.floor = r)}
+            style={[styles.input, errors.floor && styles.errorInput]}
+            value={basicInfo.floor}
+            onChangeText={(text) =>
+              setBasicInfo((prev) => ({ ...prev, floor: text }))
+            }
           />
+          {errors.floor && <Text style={styles.errorText}>{errors.floor}</Text>}
 
           <Text style={styles.label}>Upload Floor Plan*</Text>
           <Capture
@@ -1127,11 +1292,14 @@ const Dashboard = () => {
             onImageDelete={(index) => handleDeleteImages(index, "Floor")}
             fieldValue="floorFile"
             singleImageCapture={true}
-            isView={false} // ✅ This enables remove button
-            savedImages={basicInfo.floorPlan} // ✅ Must be correctly updated
+            isView={false}
+            savedImages={basicInfo.floorPlan}
             mandatoryFieldRef={mandatoryFieldRef}
             allowGallery={true}
           />
+          {errors.floorPlan && (
+            <Text style={styles.errorText}>{errors.floorPlan}</Text>
+          )}
 
           {/* <TouchableOpacity
             style={styles.button}
@@ -1155,7 +1323,7 @@ const Dashboard = () => {
             editable={false}
           />
 
-          <Text style={styles.label}>Door Type*</Text>
+          {/* <Text style={styles.label}>Door Type*</Text>
           <View
             style={{
               borderWidth: 1,
@@ -1194,7 +1362,53 @@ const Dashboard = () => {
                 />
               ))}
             </Picker>
+          </View> */}
+
+          <Text style={styles.label}>Door Type*</Text>
+          <View
+            style={[
+              {
+                borderWidth: 1,
+                borderColor: "#ccc",
+                borderRadius: 6,
+                backgroundColor: "#e9f1fb",
+                overflow: "hidden",
+                height: Platform.OS === "ios" ? 200 : 48,
+                justifyContent: "center",
+                marginTop: 8,
+              },
+              errors.doorType && styles.errorInput, // red border when invalid
+            ]}
+          >
+            <Picker
+              ref={(ref) => {
+                if (ref) mandatoryFieldRef.current.doorType = ref;
+              }}
+              selectedValue={formData.doorType}
+              onValueChange={(v) => handleFormDataChange("doorType", v)}
+              dropdownIconColor="#034694"
+              style={{
+                width: "100%",
+                backgroundColor: "#e9f1fb",
+                color: "#034694",
+                fontSize: 16,
+              }}
+              mode="dropdown"
+            >
+              <Picker.Item label="Select" value="" />
+              {doorOptions.map((opt) => (
+                <Picker.Item
+                  color="#034694"
+                  key={opt.doorTypeId}
+                  label={opt.doorTypeName}
+                  value={opt.doorTypeId}
+                />
+              ))}
+            </Picker>
           </View>
+          {errors.doorType && (
+            <Text style={styles.errorText}>{errors.doorType}</Text>
+          )}
 
           {/* <View
             style={{
@@ -1366,7 +1580,7 @@ const Dashboard = () => {
         </View>
         {/* Physical Measurements Section */}
 
-        <Text style={styles.label}>Fire Rating and Certification*</Text>
+        <Text style={styles.label}>Physical Measurements - Gaps</Text>
 
         {[
           { key: "head", label: "Head (mm)" },
@@ -1385,18 +1599,24 @@ const Dashboard = () => {
               </Text>
 
               <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={formData[key as FormDataKey]?.toString() ?? ""}
-                onChangeText={(val) => {
-                  const filteredVal = val.replace(/[-eE]/g, "");
-                  handleGapsChange(key, filteredVal);
-                }}
-                placeholder={label}
                 ref={(ref) => {
                   if (ref) mandatoryFieldRef.current[key] = ref;
                 }}
+                style={[styles.input, errors[key] && styles.errorInput]}
+                keyboardType={Platform.OS === "ios" ? "decimal-pad" : "numeric"}
+                value={formData[key as FormDataKey]?.toString() ?? ""}
+                onChangeText={(val) => {
+                  const normalized = val
+                    .replace(/,/g, ".") // comma → dot
+                    .replace(/[^\d.]/g, "") // keep digits and dots
+                    .replace(/^(\d*\.\d*).*$/, "$1"); // keep only first dot
+                  handleGapsChange(key, normalized);
+                }}
+                placeholder={label}
               />
+              {errors[key] && (
+                <Text style={styles.errorText}>{errors[key]}</Text>
+              )}
 
               {actionmenuFlag[key] && (
                 <View style={styles.captureBox}>
@@ -1418,10 +1638,10 @@ const Dashboard = () => {
                     reset={resetCaptureFlag}
                     mandatoryFieldRef={mandatoryFieldRef}
                     isView={false}
-                    savedImages={[]}
+                    savedImages={actionImages[key] || []}
+                    forceShow={actionmenuFlag[key]} // ✅ tell MiniCapture to show at 3.1
                   />
 
-                  {/* Show Due Date if Severity is selected */}
                   {(formData as any)[`${key}Severity`] &&
                     (formData as any)[`${key}Severity`] !== "Select" && (
                       <View style={{ marginTop: 8 }}>
@@ -1608,33 +1828,6 @@ const Dashboard = () => {
         }}
       >
         <TouchableOpacity
-          style={[
-            styles.button,
-            {
-              backgroundColor: "#ffffff",
-              paddingVertical: 14,
-              borderRadius: 8,
-              alignItems: "center",
-              justifyContent: "center",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 2,
-              elevation: 2,
-              borderWidth: 1,
-              borderColor: "#000000",
-              flex: 1, // equal space
-              marginRight: 8, // gap between buttons
-            },
-          ]}
-          onPress={handleSubmit}
-        >
-          <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
-            {submitting ? "Submitting..." : "Submit"}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={[
             styles.button,
@@ -1660,6 +1853,35 @@ const Dashboard = () => {
             Back
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.button,
+            {
+              backgroundColor: "#ffffff",
+              paddingVertical: 14,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+              elevation: 2,
+              borderWidth: 1,
+              borderColor: "#000000",
+              flex: 1, // equal space
+              marginRight: 8, // gap between buttons
+            },
+          ]}
+          // onPress={handleSubmit}
+          onPress={validateAndSubmit}
+        >
+          <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
+            {submitting ? "Submitting..." : "Submit"}
+          </Text>
+        </TouchableOpacity>
+
+        
       </View>
 
       {message ? (
@@ -1750,6 +1972,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
+  errorInput: { borderColor: "red" },
+  errorText: { color: "red", marginTop: 4, fontSize: 12 },
   preview: {
     width: "100%",
     height: 200,

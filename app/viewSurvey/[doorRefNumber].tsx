@@ -174,12 +174,16 @@ const ViewSurvey: React.FC = () => {
   //     [fieldName]: value,
   //   }));
   // };
-  const handleActionFieldsChange = (field: string, type: string, value: string) => {
-  setFormData(prev => ({
-    ...prev,
-    [`${field}${type}`]: value, // e.g. headSeverity = "2"
-  }));
-};
+  const handleActionFieldsChange = (
+    field: string,
+    type: string,
+    value: string
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [`${field}${type}`]: value, // e.g. headSeverity = "2"
+    }));
+  };
 
   const handleResetAction = (key: string) => {
     // reset section flags + photos for a specific key
@@ -200,205 +204,202 @@ const ViewSurvey: React.FC = () => {
   };
 
   // ----- Submit -----
- const handleSubmit = async (status: string = "Compliance") => {
-  try {
-    setSubmitting(true);
+  const handleSubmit = async (status: string = "Compliance") => {
+    try {
+      setSubmitting(true);
 
-    const phyKeys: ("head" | "hinge" | "closing" | "threshold")[] = [
-      "head",
-      "hinge",
-      "closing",
-      "threshold",
-    ];
+      const phyKeys: ("head" | "hinge" | "closing" | "threshold")[] = [
+        "head",
+        "hinge",
+        "closing",
+        "threshold",
+      ];
 
-    // Helper: does this physical section have an action?
-    const isActive = (k: string) => {
-      const m = Number((formData as any)[k]);
-      const hasAny =
-        !!(formData as any)[`${k}Severity`] ||
-        !!(formData as any)[`${k}Category`] ||
-        !!(formData as any)[`${k}Remediation`] ||
-        !!(formData as any)[`${k}Comments`] ||
-        !!(formData as any)[`${k}DueDate`];
-      return (Number.isFinite(m) && m >= 4) || hasAny;
-    };
-
-    // ---- physicalMeasurement ----
-    const physicalMeasurement: any = {
-      fireRatingID: (formData as any).fireResistance ?? "",
-      comments: formData.comments || "",
-      hingePosition: (formData as any).hingeLocation ?? "",
-    };
-
-    phyKeys.forEach((k) => {
-      const active = isActive(k);
-      physicalMeasurement[k] = {
-        value: Number((formData as any)[k]),
-        actionItem: active ? "yes" : "no",
-        timeline: active ? "Short term" : "",
-        severity: active ? (formData as any)[`${k}Severity`] ?? "" : "",
-        comment: active ? (formData as any)[`${k}Comments`] ?? "" : "",
-        category: active ? (formData as any)[`${k}Category`] ?? "" : "",
-        dueDate: active ? (formData as any)[`${k}DueDate`] ?? null : null,
-        remediation: active
-          ? (formData as any)[`${k}Remediation`] ?? ""
-          : "",
-        photos: active ? (actionImages[k] ?? []) : [],
+      // Helper: does this physical section have an action?
+      const isActive = (k: string) => {
+        const m = Number((formData as any)[k]);
+        const hasAny =
+          !!(formData as any)[`${k}Severity`] ||
+          !!(formData as any)[`${k}Category`] ||
+          !!(formData as any)[`${k}Remediation`] ||
+          !!(formData as any)[`${k}Comments`] ||
+          !!(formData as any)[`${k}DueDate`];
+        return (Number.isFinite(m) && m >= 4) || hasAny;
       };
-    });
 
-    // non-gap physical fields (always no action)
-    ([
-      "doorThickness",
-      "frameDepth",
-      "doorSize",
-      "fullDoorsetSize",
-    ] as const).forEach((key) => {
-      physicalMeasurement[key] = {
-        value: Number((formData as any)[key]),
-        actionItem: "no",
-        timeline: "",
-        severity: "",
-        comment: "",
-        category: "",
-        dueDate: null,
-        remediation: "",
-        photos: [],
+      // ---- physicalMeasurement ----
+      const physicalMeasurement: any = {
+        fireRatingID: (formData as any).fireResistance ?? "",
+        comments: formData.comments || "",
+        hingePosition: (formData as any).hingeLocation ?? "",
       };
-    });
 
-    // ---- complianceChecks ----
-    const compArr: ComplianceKey[] = [
-      "intumescentStrips",
-      "coldSmokeSeals",
-      "selfClosingDevice",
-      "fireLockedSign",
-      "fireShutSign",
-      "holdOpenDevice",
-      "visibleCertification",
-      "doorGlazing",
-      "pyroGlazing",
-    ];
-
-    const complianceChecks = compArr.map((item) => {
-      const isSpecialCase = item === "fireLockedSign" && !fireKeepLocked;
-      const isCompliant = (complianceCheck as any)[item];
-      const actionRequired = !isSpecialCase && !isCompliant;
-
-      return {
-        complianceCheckMasterID: (complianceCheck as any)[`${item}Id`] ?? "",
-        isCompliant,
-        actionItem: actionRequired
-          ? {
-              timeline: "Short term",
-              severity: (complianceCheck as any)[`${item}Severity`] ?? "",
-              comment: (complianceCheck as any)[`${item}Comments`] ?? "",
-              category: (complianceCheck as any)[`${item}Category`] ?? "",
-              dueDate: (complianceCheck as any)[`${item}DueDate`] ?? null,
-              remediation:
-                (complianceCheck as any)[`${item}Remediation`] ?? "",
-              photos: (actionImages as any)[item] ?? [],
-            }
-          : {
-              timeline: "",
-              severity: "",
-              comment: "",
-              category: "",
-              dueDate: null,
-              remediation: "",
-              photos: [],
-            },
-      };
-    });
-
-    // ---- door photos map ----
-    const doorPhotosArr: string[] =
-      (formData as any).doorPhoto ??
-      (formData as any).doorPhotos ??
-      [];
-    const doorImgObj: Record<string, string> = {};
-    doorPhotosArr.forEach((url, i) => {
-      doorImgObj[`Image ${i + 1} Path`] = url;
-    });
-
-    if (!propertyId || propertyId.toString().length !== 36) {
-      Alert.alert("Invalid property ID", "Please select a valid property before submitting.");
-      setSubmitting(false);
-      return;
-    }
-
-    const fullFormData = {
-      propertyInfo: {
-        propertyMasterId: propertyId,
-        inspectionStartedOn: basicFormData.date,
-        inspectedBy: userObj?.userName,
-        InspectedById: userObj?.userId,
-        inspectionApprovedDate: null,
-        lastInspectionDate: new Date().toISOString(),
-        inspectionApprovedBy: "",
-        lastInspectedBy: userObj?.userName,
-        status, // from arg
-        inspectionUpdatedBy: userObj?.userName,
-        inspectionUpdatedOn: new Date().toISOString(),
-        nextInspectionDueDate: null,
-      },
-      inspectedPropertyFloorsInfo: {
-        floorNo: basicFormData.floor ? Number(basicFormData.floor) : null,
-        floorPlanImage: basicFormData.floorPlan?.[0] ?? "no image",
-        createdBy: userObj?.userEmail,
-        updatedBy: userObj?.userEmail,
-      },
-      inspectedDoorDto: {
-        floorNo: basicFormData.floor ? Number(basicFormData.floor) : null,
-        floorImage: basicFormData.floorPlan?.[0] ?? "no image",
-        doorTypeId: (formData as any).doorType ?? "",
-        doorRefNumber: (formData as any).doorNumber ?? "",
-        doorNumber: (formData as any).doorNumber ?? "",
-        inspectedBy: userObj?.userName,
-        doorInspectionDate: basicFormData.date,
-        status: "Compliant",
-        flatName: "Flat A",
-        doorTypeName: (formData as any).doorTypeName ?? "",
-        propertyName: basicFormData.buildingName ?? "",
-        otherDoorTypeName: (formData as any).doorOther ?? "",
-        doorLocation: (formData as any).doorLocation ?? "",
-        doorPhoto: doorImgObj,
-      },
-      complianceChecks,
-      physicalMeasurement,
-      additionalInfos: [{ imagePath: floorPlanImages }],
-    };
-
-    console.log("➡️ SUBMIT payload:", fullFormData);
-
-    const response = await saveData(JSON.stringify(fullFormData));
-
-    if (response.status === 200) {
-      setToastData({
-        toastShow: true,
-        toastType: "success",
-        toastString: `✅ Inspection for Door Ref No: ${(formData as any).doorNumber} saved successfully.`,
+      phyKeys.forEach((k) => {
+        const active = isActive(k);
+        physicalMeasurement[k] = {
+          value: Number((formData as any)[k]),
+          actionItem: active ? "yes" : "no",
+          timeline: active ? "Short term" : "",
+          severity: active ? (formData as any)[`${k}Severity`] ?? "" : "",
+          comment: active ? (formData as any)[`${k}Comments`] ?? "" : "",
+          category: active ? (formData as any)[`${k}Category`] ?? "" : "",
+          dueDate: active ? (formData as any)[`${k}DueDate`] ?? null : null,
+          remediation: active ? (formData as any)[`${k}Remediation`] ?? "" : "",
+          photos: active ? actionImages[k] ?? [] : [],
+        };
       });
-      setTimeout(() => handleCancel(), 1500);
-    } else {
+
+      // non-gap physical fields (always no action)
+      (
+        ["doorThickness", "frameDepth", "doorSize", "fullDoorsetSize"] as const
+      ).forEach((key) => {
+        physicalMeasurement[key] = {
+          value: Number((formData as any)[key]),
+          actionItem: "no",
+          timeline: "",
+          severity: "",
+          comment: "",
+          category: "",
+          dueDate: null,
+          remediation: "",
+          photos: [],
+        };
+      });
+
+      // ---- complianceChecks ----
+      const compArr: ComplianceKey[] = [
+        "intumescentStrips",
+        "coldSmokeSeals",
+        "selfClosingDevice",
+        "fireLockedSign",
+        "fireShutSign",
+        "holdOpenDevice",
+        "visibleCertification",
+        "doorGlazing",
+        "pyroGlazing",
+      ];
+
+      const complianceChecks = compArr.map((item) => {
+        const isSpecialCase = item === "fireLockedSign" && !fireKeepLocked;
+        const isCompliant = (complianceCheck as any)[item];
+        const actionRequired = !isSpecialCase && !isCompliant;
+
+        return {
+          complianceCheckMasterID: (complianceCheck as any)[`${item}Id`] ?? "",
+          isCompliant,
+          actionItem: actionRequired
+            ? {
+                timeline: "Short term",
+                severity: (complianceCheck as any)[`${item}Severity`] ?? "",
+                comment: (complianceCheck as any)[`${item}Comments`] ?? "",
+                category: (complianceCheck as any)[`${item}Category`] ?? "",
+                dueDate: (complianceCheck as any)[`${item}DueDate`] ?? null,
+                remediation:
+                  (complianceCheck as any)[`${item}Remediation`] ?? "",
+                photos: (actionImages as any)[item] ?? [],
+              }
+            : {
+                timeline: "",
+                severity: "",
+                comment: "",
+                category: "",
+                dueDate: null,
+                remediation: "",
+                photos: [],
+              },
+        };
+      });
+
+      // ---- door photos map ----
+      const doorPhotosArr: string[] =
+        (formData as any).doorPhoto ?? (formData as any).doorPhotos ?? [];
+      const doorImgObj: Record<string, string> = {};
+      doorPhotosArr.forEach((url, i) => {
+        doorImgObj[`Image ${i + 1} Path`] = url;
+      });
+
+      if (!propertyId || propertyId.toString().length !== 36) {
+        Alert.alert(
+          "Invalid property ID",
+          "Please select a valid property before submitting."
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      const fullFormData = {
+        propertyInfo: {
+          propertyMasterId: propertyId,
+          inspectionStartedOn: basicFormData.date,
+          inspectedBy: userObj?.userName,
+          InspectedById: userObj?.userId,
+          inspectionApprovedDate: null,
+          lastInspectionDate: new Date().toISOString(),
+          inspectionApprovedBy: "",
+          lastInspectedBy: userObj?.userName,
+          status, // from arg
+          inspectionUpdatedBy: userObj?.userName,
+          inspectionUpdatedOn: new Date().toISOString(),
+          nextInspectionDueDate: null,
+        },
+        inspectedPropertyFloorsInfo: {
+          floorNo: basicFormData.floor ? Number(basicFormData.floor) : null,
+          floorPlanImage: basicFormData.floorPlan?.[0] ?? "no image",
+          createdBy: userObj?.userEmail,
+          updatedBy: userObj?.userEmail,
+        },
+        inspectedDoorDto: {
+          floorNo: basicFormData.floor ? Number(basicFormData.floor) : null,
+          floorImage: basicFormData.floorPlan?.[0] ?? "no image",
+          doorTypeId: (formData as any).doorType ?? "",
+          doorRefNumber: (formData as any).doorNumber ?? "",
+          doorNumber: (formData as any).doorNumber ?? "",
+          inspectedBy: userObj?.userName,
+          doorInspectionDate: basicFormData.date,
+          status: "Compliant",
+          flatName: "Flat A",
+          doorTypeName: (formData as any).doorTypeName ?? "",
+          propertyName: basicFormData.buildingName ?? "",
+          otherDoorTypeName: (formData as any).doorOther ?? "",
+          doorLocation: (formData as any).doorLocation ?? "",
+          doorPhoto: doorImgObj,
+        },
+        complianceChecks,
+        physicalMeasurement,
+        additionalInfos: [{ imagePath: floorPlanImages }],
+      };
+
+      console.log("➡️ SUBMIT payload:", fullFormData);
+
+      const response = await saveData(JSON.stringify(fullFormData));
+
+      if (response.status === 200) {
+        setToastData({
+          toastShow: true,
+          toastType: "success",
+          toastString: `✅ Inspection for Door Ref No: ${
+            (formData as any).doorNumber
+          } saved successfully.`,
+        });
+        setTimeout(() => handleCancel(), 1500);
+      } else {
+        setToastData({
+          toastShow: true,
+          toastType: "failure",
+          toastString: "❌ Failed to save. Please try again.",
+        });
+      }
+    } catch (err) {
+      console.error("❌ handleSubmit error:", err);
       setToastData({
         toastShow: true,
         toastType: "failure",
-        toastString: "❌ Failed to save. Please try again.",
+        toastString: "Something went wrong during submission.",
       });
+    } finally {
+      setSubmitting(false);
     }
-  } catch (err) {
-    console.error("❌ handleSubmit error:", err);
-    setToastData({
-      toastShow: true,
-      toastType: "failure",
-      toastString: "Something went wrong during submission.",
-    });
-  } finally {
-    setSubmitting(false);
-  }
-};
-
+  };
 
   const saveData = async (payload: any) => {
     try {
@@ -450,14 +451,13 @@ const ViewSurvey: React.FC = () => {
   };
 
   // ViewSurvey.tsx
-const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
 
-useEffect(() => {
-  // edit => editable, anything else => view-only
-  setIsView(mode !== "edit");
-  console.log("mode:", mode, "isView:", mode !== "edit");
-}, [mode]);
-
+  useEffect(() => {
+    // edit => editable, anything else => view-only
+    setIsView(mode !== "edit");
+    console.log("mode:", mode, "isView:", mode !== "edit");
+  }, [mode]);
 
   // ---- Data load ----
   useEffect(() => {
@@ -510,29 +510,41 @@ useEffect(() => {
           closing: data.physicalMeasurement.closing?.value,
           threshold: data.physicalMeasurement.threshold?.value,
           comments: data.physicalMeasurement?.comments ?? "",
+          photos: Object.values(
+            data.physicalMeasurement.photo || {}
+          ).filter((url): url is string => !!url),
         };
 
         // 🔧🔧🔧 BEGIN: copy physical action fields into flat formData keys + photos into actionImages
-    const pm = data.physicalMeasurement ?? {};
-    const physKeys = ["head", "hinge", "closing", "threshold"] as const;
+        const pm = data.physicalMeasurement ?? {};
+        const physKeys = ["head", "hinge", "closing", "threshold"] as const;
 
-    // collect photos for actionImages from physical measurements
-    const physAI: ActionImages = {} as ActionImages;
+        // collect photos for actionImages from physical measurements
+        const physAI: ActionImages = {} as ActionImages;
+        physKeys.forEach((k) => {
+          const src = pm?.[k] || {};
+          physAI[k] = Array.isArray(src.photos) ? src.photos : []; // ✅
+        });
 
-    physKeys.forEach((k) => {
-      const src = pm?.[k] || {};
-      // formData expects flat keys like headSeverity, headCategory, etc.
-      (fd as any)[`${k}Severity`] = src.severity ?? "";
-      (fd as any)[`${k}Category`] = src.category ?? "";
-      (fd as any)[`${k}Comments`] = src.comment ?? "";
-      (fd as any)[`${k}Remediation`] = src.remediation ?? "";
-      (fd as any)[`${k}DueDate`] = src.dueDate ? formatDateString(src.dueDate) : "";
-      // saved images for MiniCapture
-      physAI[k] = Array.isArray(src.photos) ? src.photos : [];
-    });
-    // 🔧🔧🔧 END
+        physKeys.forEach((k) => {
+          const src = pm?.[k] || {};
+          // formData expects flat keys like headSeverity, headCategory, etc.
+          (fd as any)[`${k}Severity`] = src.severity ?? "";
+          (fd as any)[`${k}Category`] = src.category ?? "";
+          (fd as any)[`${k}Comments`] = src.comment ?? "";
+          (fd as any)[`${k}Remediation`] = src.remediation ?? "";
+          (fd as any)[`${k}DueDate`] = src.dueDate
+            ? formatDateString(src.dueDate)
+            : "";
+            (fd as any)[`${k}photos`] = src.photos ?? "";
+            console.log("photos",src.photos)
+          // saved images for MiniCapture
+          physAI[k] = Array.isArray(src.photos) ? src.photos : [];
+        });
+        // 🔧🔧🔧 END
+        setActionImages(physAI); // ✅ now FormComponent gets actionImages.<field>
 
-    setFormData(fd);
+        setFormData(fd);
 
         setBasicFormData({
           buildingName: property.propertyMaster.propertyName,
@@ -579,7 +591,7 @@ useEffect(() => {
         });
 
         setComplianceCheck(cc);
-        setActionImages(ai);
+        // setActionImages(ai);
         setDoorTypesOption(property.doorTypes);
         setFloorPlanImages([data.inspectedPropertyFloorsInfo.floorPlanImage]);
         setIsColdSeals(

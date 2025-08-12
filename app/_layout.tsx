@@ -49,8 +49,8 @@
 //   content: { flex: 1, position: "relative" },
 // });
 // app/_layout.tsx
+import Sidebar from "@/app/Sidebar";
 import Header from "@/components/common/Header";
-import Sidebar from "@/components/Sidebar";
 import { store } from "@/components/slices/store";
 import { router, Stack, usePathname } from "expo-router";
 import React, { useEffect, useState } from "react";
