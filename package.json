@@ -56,7 +56,7 @@
     "expo-image-picker": "~16.1.4",
     "expo-linking": "~7.1.7",
     "expo-router": "~5.1.4",
-    "expo-sharing": "^13.1.5",
+    "expo-sharing": "~13.1.5",
     "expo-splash-screen": "~0.30.10",
     "expo-status-bar": "~2.2.3",
     "expo-symbols": "~0.4.5",
@@ -83,7 +83,8 @@
     "react-toastify": "^11.0.5",
     "react-webcam": "^7.2.0",
     "expo-image-manipulator": "~13.1.7",
-    "expo-file-system": "~18.1.11"
+    "expo-file-system": "~18.1.11",
+    "expo-print": "~14.1.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

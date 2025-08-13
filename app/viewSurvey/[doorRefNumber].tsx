@@ -26,10 +26,17 @@ import {
   ActionImages,
   ActionMenuFlag,
   ComplianceCheck,
-  FormData,
+  FormData as InspectionFormData,
 } from "../../components/types";
+// import { ensureWebFileCtor } from "../filePolyfill"; // <- import if not called globally
 
-export const BASE_MEASURES: (keyof FormData)[] = [
+// export const BASE_MEASURES: (keyof FormData)[] = [
+//   "head",
+//   "hinge",
+//   "closing",
+//   "threshold",
+// ];
+export const BASE_MEASURES: (keyof InspectionFormData)[] = [
   "head",
   "hinge",
   "closing",
@@ -67,6 +74,10 @@ const COMPLIANCE_CHECK_MASTER: Record<`${ComplianceKey}Id`, string> = {
   pyroGlazingId: "c9873267-e600-4c99-bf08-088dee277909",
 };
 
+// keep your existing type ComplianceKey
+
+// --- helpers that need state setters; must be inside the component ---
+
 const defaultActionMenuFlag: ActionMenuFlag = {
   head: false,
   hinge: false,
@@ -93,7 +104,11 @@ const ViewSurvey: React.FC = () => {
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
   const [propertyId, setPropertyId] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<FormData>({} as FormData);
+  const [formData, setFormData] = useState<InspectionFormData>(
+    {} as InspectionFormData
+  );
+
+  // const [formData, setFormData] = useState<FormData>({} as FormData);
   const [complianceCheck, setComplianceCheck] = useState<ComplianceCheck>(
     {} as ComplianceCheck
   );
@@ -133,6 +148,71 @@ const ViewSurvey: React.FC = () => {
       ? params.doorRefNumber[0]
       : "";
 
+  const COMPLIANCE_KEYS: readonly ComplianceKey[] = [
+    "intumescentStrips",
+    "coldSmokeSeals",
+    "selfClosingDevice",
+    "fireLockedSign",
+    "fireShutSign",
+    "holdOpenDevice",
+    "visibleCertification",
+    "doorGlazing",
+    "pyroGlazing",
+  ];
+  const isComplianceKey = (k: string): k is ComplianceKey =>
+    (COMPLIANCE_KEYS as readonly string[]).includes(k);
+
+  // const handleComplianceActionFieldsChange = (
+  //   field: ComplianceKey,
+  //   type: string, // "Severity" | "Category" | "Comments" | "Remediation" | "DueDate" | "Timeline"
+  //   value: string
+  // ) => {
+  //   setComplianceCheck(
+  //     (prev) =>
+  //       ({
+  //         ...prev,
+  //         [`${field}${type}`]: value,
+  //       } as any)
+  //   );
+  // };
+
+  const resetComplianceAction = (key: ComplianceKey) => {
+    setComplianceCheck(
+      (prev) =>
+        ({
+          ...prev,
+          [`${key}Severity`]: "",
+          [`${key}Category`]: "",
+          [`${key}Remediation`]: "",
+          [`${key}Comments`]: "",
+          [`${key}DueDate`]: "",
+          [`${key}Timeline`]: "",
+        } as any)
+    );
+    setActionImages((prev) => ({ ...prev, [key]: [] }));
+  };
+
+  const resetPhysicalAction = (key: string) => {
+    setActionMenuFlag((prev) => ({ ...prev, [key]: false })); // <-- fixed
+    setActionImages((prev) => ({ ...prev, [key]: [] }));
+    setFormData(
+      (prev) =>
+        ({
+          ...prev,
+          [`${key}Severity`]: "",
+          [`${key}Category`]: "",
+          [`${key}Remediation`]: "",
+          [`${key}Comments`]: "",
+          [`${key}DueDate`]: "",
+        } as any)
+    );
+  };
+
+   const handleResetAction = (key: string) => {
+    if (isComplianceKey(key)) resetComplianceAction(key as ComplianceKey);
+    else resetPhysicalAction(key);
+  };
+
   // ----- Handlers: plain form changes -----
   // ViewSurvey.tsx
   const handleFormDataChange = (field: string, value: string) => {
@@ -146,47 +226,52 @@ const ViewSurvey: React.FC = () => {
     }
   };
 
-  const handleComplianceToggle = (field: keyof ComplianceCheck) => {
-    setComplianceCheck((prev) => {
-      const nextVal = !prev[field];
-      const next: any = { ...prev, [field]: nextVal };
+// was: (field: ComplianceKey, val: boolean)
+const handleComplianceToggle = (field: keyof ComplianceCheck, val: boolean) => {
+  setComplianceCheck(prev => {
+    const next: any = { ...prev, [field]: val };
+    const f = field as unknown as string;
 
-      // Self closing device ↔ Keep Locked special case
-      if (field === "selfClosingDevice") {
-        // if NO self-closing device → Keep Locked sign becomes relevant
-        setFireKeepLocked(!nextVal);
-        if (nextVal) {
-          // when self closer present, we treat "Keep Locked" as compliant
-          next.fireLockedSign = true;
-        }
+    // self closer logic
+    if (f === "selfClosingDevice") {
+      setFireKeepLocked(!val);
+      if (val) {
+        next.fireLockedSign = true;
+        resetComplianceAction("fireLockedSign");
       }
+    }
 
-      // Glazing ↔ Pyro flow
-      if (field === "doorGlazing") {
-        setIsGlazing(nextVal);
-        if (!nextVal) {
-          // optionally reset pyro fields when no glazing
-          // next.pyroGlazing = true; // or false, depending on your rules
-          // next.pyroGlazingSeverity = "Select";
-          // next.pyroGlazingCategory = "Select";
-          // next.pyroGlazingRemediation = "";
-          // next.pyroGlazingComments = "";
-          // next.pyroGlazingDueDate = "";
-        }
+    // glazing logic
+    if (f === "doorGlazing") {
+      setIsGlazing(val);
+      if (!val) {
+        next.pyroGlazing = false;
+        resetComplianceAction("pyroGlazing");
       }
+    }
 
-      return next;
-    });
-  };
+    // if it just became compliant, clear its own action data
+    if (val && isComplianceKey(f)) {
+      resetComplianceAction(f);
+    }
 
-  // ----- Handlers: MiniCapture integration -----
-  // keep field-first internally
-  // REPLACE your current handleImagesChangeMini with this:
-  // const handleImagesChangeMini = (images: string[], field: string) => {
-  //   const key = field.toLowerCase();
-  //   setActionImages(prev => ({ ...prev, [key]: images }));
-  //   setFormData(prev => ({ ...prev, [`${key}Images`]: images }));
-  // };
+    return next;
+  });
+};
+
+// was: (field: ComplianceKey, type: string, value: string)
+const handleComplianceActionFieldsChange = (
+  field: keyof ComplianceCheck,
+  type: string,
+  value: string
+) => {
+  setComplianceCheck(prev => ({
+    ...(prev as any),
+    [`${field}${type}`]: value,
+  }) as any);
+};
+
+
 
   async function base64DataUrlToFileUri(
     dataUrl: string
@@ -208,10 +293,14 @@ const ViewSurvey: React.FC = () => {
     if (ext === "webp") return "image/webp";
     return "image/jpeg";
   };
-  async function normaliseForUpload(
-    src: string,
-    field: string
-  ): Promise<{ uri: string; name: string; type: string }> {
+  async function normaliseForUpload(src: string, field: string) {
+    if (!src) {
+      return {
+        uri: "",
+        name: `${field}_Image_${Date.now()}.jpg`,
+        type: "image/jpeg",
+      };
+    }
     if (src.startsWith("data:image/")) {
       return base64DataUrlToFileUri(src);
     }
@@ -219,62 +308,91 @@ const ViewSurvey: React.FC = () => {
     return { uri: src, name, type: guessMimeFromName(name) };
   }
 
+  // --- helpers ---
+  const dataUrlToBlob = (dataUrl: string): Blob => {
+    const [hdr, b64] = dataUrl.split(",");
+    const mime =
+      hdr.match(/^data:(.+?);base64$/)?.[1] || "application/octet-stream";
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  };
+
+  const urlToBlob = async (src: string): Promise<Blob> => {
+    const res = await fetch(src);
+    return await res.blob();
+  };
+
   const uploadImageAPI = async (
     newImages: string[],
     field: string
   ): Promise<string> => {
     try {
-      const rawToken = userObj?.token ?? "";
-      if (!rawToken) {
-        console.warn("No auth token found in userObj");
-        return "";
-      }
+      if (!Array.isArray(newImages) || newImages.length === 0) return "";
+      const latest = newImages[newImages.length - 1];
+      if (typeof latest !== "string" || latest.length === 0) return "";
+      if (/^https?:\/\//i.test(latest)) return latest; // already remote
 
-      // ✅ ensure exactly one "Bearer " prefix
+      const rawToken = userObj?.token ?? "";
+      if (!rawToken) return "";
       const authHeader = rawToken.startsWith("Bearer ")
         ? rawToken
         : `Bearer ${rawToken}`;
 
-      const latest = newImages[newImages.length - 1];
-      let filePart: { uri?: string; name: string; type: string } | File | Blob;
+      const form = new globalThis.FormData();
       let name = `${field}_Image_${Date.now()}.jpg`;
       let type = "image/jpeg";
 
       if (Platform.OS === "web") {
-        const res = await fetch(latest);
-        const blob = await res.blob();
-        type = blob.type || type;
-        // Use File on web so the server gets a filename
-        filePart = new File([blob], name, { type });
+        let blob: Blob;
+        if (latest.startsWith("data:")) blob = dataUrlToBlob(latest);
+        else blob = await urlToBlob(latest); // blob:, object URL, etc.
+
+        try {
+          // @ts-ignore
+          const f = new File([blob], name, {
+            type: (blob as any).type || type,
+          });
+          form.append("File", f);
+        } catch {
+          form.append("File", blob, name);
+        }
       } else {
-        const parts = await normaliseForUpload(latest, field);
-        name = parts.name;
-        type = parts.type;
-        filePart = { uri: parts.uri, name, type } as any;
+        let filePart: { uri: string; name: string; type: string };
+        if (/^data:image\//i.test(latest)) {
+          const {
+            uri,
+            name: n,
+            type: t,
+          } = await base64DataUrlToFileUri(latest);
+          name = n;
+          type = t || type;
+          filePart = { uri, name, type };
+        } else {
+          const parts = await normaliseForUpload(latest, field);
+          name = parts.name;
+          type = parts.type || type;
+          filePart = { uri: parts.uri, name, type };
+        }
+        // @ts-ignore RN allows this shape
+        form.append("File", filePart as any);
       }
 
-      const form = new FormData();
-      form.append("File", filePart as any, name);
       form.append("Client", "ABC");
       form.append("Property", "Candor");
       form.append("InspectionDate", new Date().toISOString());
 
       const resp = await fetch(`${hostName}api/Inspection/upload`, {
         method: "POST",
-        headers: {
-          Authorization: authHeader, // ✅
-          // DO NOT set Content-Type manually when sending FormData
-        },
+        headers: { Authorization: authHeader }, // DO NOT set Content-Type here
         body: form,
-        // credentials: 'include', // only if your API uses cookies (likely not)
       });
 
       if (!resp.ok) {
-        const www = resp.headers.get("www-authenticate") || "";
         const text = await resp.text().catch(() => "");
         console.error("Upload failed", {
           status: resp.status,
-          wwwAuthenticate: www,
           body: text?.slice(0, 300),
         });
         return "";
@@ -288,97 +406,59 @@ const ViewSurvey: React.FC = () => {
     }
   };
 
-  const handleImagesChangeMini = async (
-    newImages: string[],
-    field: string
-  ): Promise<void> => {
+  const handleImagesChangeMini = async (newImages: string[], field: string) => {
     const prev = actionImages[field] || [];
 
-    // Only upload items that aren't already server URLs
-    const toUpload = newImages.filter(
-      (u) => !(u.startsWith("http://") || u.startsWith("https://"))
+    // Only attempt upload for brand-new local items (and guard types)
+    const toUpload = (newImages || []).filter(
+      (u): u is string => typeof u === "string" && !/^https?:\/\//i.test(u)
     );
-    if (toUpload.length === 0) return;
+    if (toUpload.length === 0) {
+      // still update merged state if user just removed images
+      setActionImages((p) => ({ ...p, [field]: newImages || [] }));
+      setFormData((p: any) => ({ ...p, [`${field}Images`]: newImages || [] }));
+      return;
+    }
 
-    // Upload each new image using your existing API helper
     const uploaded = (
       await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
     ).filter(Boolean) as string[];
 
-    if (uploaded.length === 0) return;
-
-    // Merge (and de-dupe just in case)
-    const next = Array.from(new Set([...prev, ...uploaded]));
-    setActionImages((prev) => ({ ...prev, [field]: next }));
-    setFormData((prev) => ({ ...prev, [`${field}Images`]: next }));
-    // setActionImages((prevMap) => ({ ...prevMap, [field]: next }));
-
-    // (Optional) also mirror into formData so MiniCapture re-renders from it too
-    // setFormData((prev: any) => ({ ...prev, [`${field}Images`]: next }));
+    const next = Array.from(new Set([...(prev || []), ...uploaded]));
+    setActionImages((p) => ({ ...p, [field]: next }));
+    setFormData((p: any) => ({ ...p, [`${field}Images`]: next }));
   };
 
-  // REPLACE your handleDeleteImages with this:
-  // const handleDeleteImages = (field: string, index: number) => {
-  //   const key = field.toLowerCase();
-  //   setActionImages(prev => {
-  //     const list = [...(prev[key] || [])];
-  //     if (index >= 0 && index < list.length) list.splice(index, 1);
-  //     return { ...prev, [key]: list };
-  //   });
-  //   setFormData(prev => {
-  //     const arr = [ ...((prev as any)[`${key}Images`] || []) ];
-  //     if (index >= 0 && index < arr.length) arr.splice(index, 1);
-  //     return { ...prev, [`${key}Images`]: arr };
-  //   });
-  // };
   const handleDeleteImages = (index: number, field: string) => {
-    switch (field) {
-      case "Floor": {
-        const updated = [...basicInfo.floorPlan];
-        updated.splice(index, 1);
-        setBasicInfo((prev: any) => ({ ...prev, floorPlan: updated }));
-        break;
-      }
-
-      case "Door": {
-        const updated = [...formData.doorPhoto];
-        updated.splice(index, 1);
-        setFormData((prev) => ({
-          ...prev,
-          doorPhoto: updated,
-          // Optional: clear doorPhoto if it's the one removed
-          // doorPhoto: updated[0] || "",
-        }));
-        break;
-      }
-
-      default: {
-        const imgArr = actionImages[field] || [];
-        const updatedImages = imgArr.filter((_, i) => i !== index);
-        setActionImages((prev) => ({
-          ...prev,
-          [field]: updatedImages,
-        }));
-        break;
-      }
+    if (field === "Floor") {
+      setBasicFormData((prev: { floorPlan: any }) => ({
+        ...prev,
+        floorPlan: (prev.floorPlan ?? []).filter(
+          (_: any, i: number) => i !== index
+        ),
+      }));
+    } else if (field === "Door") {
+      setFormData((prev) => ({
+        ...prev,
+        doorPhoto: (prev.doorPhoto ?? []).filter(
+          (_: any, i: number) => i !== index
+        ),
+      }));
+    } else if (field === "Additional") {
+      setBasicFormData((prev: { additionalPhotos: any }) => ({
+        ...prev,
+        additionalPhotos: (prev.additionalPhotos ?? []).filter(
+          (_: any, i: number) => i !== index
+        ),
+      }));
+    } else {
+      setActionImages((prev) => ({
+        ...prev,
+        [field]: (prev?.[field] ?? []).filter((_, i) => i !== index),
+      }));
     }
-
-    // Optional: delete from blob storage
-    // deleteImageAPI(imageToDelete);
   };
 
-  // const handleActionFieldsChange = (
-  //   key: string,
-  //   value: string,
-  //   type: string
-  // ) => {
-  //   // type: 'Severity' | 'Category' | 'Remediation' | 'Comments' | 'DueDate'
-  //   const fieldName = `${key}${type}`;
-  //   setFormData((prev: any) => ({
-  //     ...prev,
-  //     [fieldName]: value,
-  //   }));
-  // };
   const handleActionFieldsChange = (
     field: string,
     type: string,
@@ -390,26 +470,25 @@ const ViewSurvey: React.FC = () => {
     }));
   };
 
-    const isEmpty = (v: any) =>
+  const isEmpty = (v: any) =>
     v === undefined ||
     v === null ||
     (typeof v === "string" && v.trim() === "") ||
     (Array.isArray(v) && v.length === 0);
 
-
-  const handleResetAction = (key: string) => {
-    // reset section flags + photos for a specific key
-    setActionMenuFlag((prev) => ({ ...prev, [key]: false }));
-    setActionImages((prev) => ({ ...prev, [key]: [] }));
-    setFormData((prev: any) => ({
-      ...prev,
-      [`${key}Severity`]: "",
-      [`${key}Category`]: "",
-      [`${key}Remediation`]: "",
-      [`${key}Comments`]: "",
-      [`${key}DueDate`]: "",
-    }));
-  };
+  // const handleResetAction = (key: string) => {
+  //   // reset section flags + photos for a specific key
+  //   setActionMenuFlag((prev) => ({ ...prev, [key]: false }));
+  //   setActionImages((prev) => ({ ...prev, [key]: [] }));
+  //   setFormData((prev: any) => ({
+  //     ...prev,
+  //     [`${key}Severity`]: "",
+  //     [`${key}Category`]: "",
+  //     [`${key}Remediation`]: "",
+  //     [`${key}Comments`]: "",
+  //     [`${key}DueDate`]: "",
+  //   }));
+  // };
   // mark the first failing field
   const focusFirstError = (errs: Record<string, string>) => {
     const firstKey = Object.keys(errs)[0];
@@ -422,52 +501,6 @@ const ViewSurvey: React.FC = () => {
   const handleCancel = () => {
     navigation.goBack();
   };
-
-  //  const validateAndSubmit = async () => {
-  //   const e: Record<string, string> = {};
-
-  //   // Basic requireds
-  //   if (isEmpty(basicInfo.floor)) e.floor = "Floor is required";
-  //   if (isEmpty(formData.doorType)) e.doorType = "Door Type is required";
-  //   if (isEmpty(formData.doorNumber)) e.doorNumber = "Door Number is required";
-  //   if (isEmpty(formData.hingeLocation))
-  //     e.hingeLocation = "Hinge Location is required";
-  //   if (isEmpty(formData.fireResistance))
-  //     e.fireResistance = "Fire rating is required";
-
-  //   // Files / images
-  //   if (isEmpty(basicInfo.floorPlan))
-  //     e.floorPlan = "Floor plan file is required";
-  //   if (isEmpty(formData.doorPhoto)) e.doorPhoto = "Door photo is required";
-
-  //   // Measurements (add/remove as needed)
-  //   const reqMeasurements = [
-  //     "head",
-  //     "hinge",
-  //     "closing",
-  //     "threshold",
-  //     "doorThickness",
-  //     "frameDepth",
-  //     "doorSize",
-  //     "fullDoorsetSize",
-  //   ];
-  //   reqMeasurements.forEach((k) => {
-  //     if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
-  //   });
-
-  //   // Example date required (if you want it mandatory)
-  //   // if (!date) e.date = "Date is required";
-
-  //   if (Object.keys(e).length) {
-  //     setErrors(e);
-  //     focusFirstError(e);
-  //     return;
-  //   }
-
-  //   setErrors({});
-  //   // proceed with your existing submit
-  //   handleSubmit();
-  // };
 
   // ----- Submit -----
   const handleSubmit = async (status: string = "Compliance") => {
@@ -622,7 +655,7 @@ const ViewSurvey: React.FC = () => {
         },
         inspectedPropertyFloorsInfo: {
           floorNo: basicFormData.floor ? Number(basicFormData.floor) : null,
-          floorPlanImage: basicFormData.floorPlan?.[0] ?? "no image",
+          floorPlanImage: basicFormData.floorPlan?.[0] ?? "",
           createdBy: userObj?.userEmail,
           updatedBy: userObj?.userEmail,
         },
@@ -644,7 +677,7 @@ const ViewSurvey: React.FC = () => {
         },
         complianceChecks,
         physicalMeasurement,
-        additionalInfos: [{ imagePath: floorPlanImages }],
+        additionalInfos: [{ imagePath: basicFormData.additionalPhotos ?? [] }],
       };
 
       console.log("➡️ SUBMIT payload:", fullFormData);
@@ -668,17 +701,17 @@ const ViewSurvey: React.FC = () => {
         });
       }
     } catch (error: any) {
-          if (error.response?.data?.errors) {
-            console.error("🚨 Validation Errors:", error.response.data.errors);
-            const firstKey = Object.keys(error.response.data.errors)[0];
-            const firstMsg = error.response.data.errors[firstKey][0];
-            Alert.alert("Validation Error", `${firstKey}: ${firstMsg}`);
-          } else {
-            Alert.alert("Submission Error", error.message || "Unknown error");
-          }
-        } finally {
-          setSubmitting(false);
-        }
+      if (error.response?.data?.errors) {
+        console.error("🚨 Validation Errors:", error.response.data.errors);
+        const firstKey = Object.keys(error.response.data.errors)[0];
+        const firstMsg = error.response.data.errors[firstKey][0];
+        Alert.alert("Validation Error", `${firstKey}: ${firstMsg}`);
+      } else {
+        Alert.alert("Submission Error", error.message || "Unknown error");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const saveData = async (payload: any) => {
@@ -699,20 +732,7 @@ const ViewSurvey: React.FC = () => {
     }
   };
 
-  // ---- Validation helpers (no more throws) ----
-  const handleMandatoryFields = () => {
-    // highlight first missing field if you want; for now it’s a no-op
-  };
-
-  // const handleValidationOnSave = (status: string) => {
-  //   // keep your existing logic; call setValidationFlag instead of throwing
-  //   setValidationFlag(false);
-  //   // ... you can port your previous checks here ...
-  //   // for demo, just submit:
-  //   handleSubmit(status);
-  // };
-
-     const handleValidationOnSave = async () => {
+  const handleValidationOnSave = async () => {
     const e: Record<string, string> = {};
 
     // Basic requireds
@@ -766,13 +786,59 @@ const ViewSurvey: React.FC = () => {
     }));
   };
 
-  const handleImagesChange = (images: string[], field: string) => {
-    if (field === "Floor") {
-      setBasicFormData((prev: any) => ({ ...prev, floorPlan: images }));
-    } else if (field === "Door") {
-      setFormData((prev: any) => ({ ...prev, doorPhotos: images }));
-    } else if (field === "Additional") {
-      setBasicFormData((prev: any) => ({ ...prev, additionalPhotos: images }));
+  // Replace your current handleImagesChange with this:
+  const handleImagesChange = async (newImages: string[], field: string) => {
+    // Normalize incoming list
+    const clean = (newImages || []).filter(
+      (s): s is string => typeof s === "string" && s.length > 0
+    );
+
+    // If list is now empty, clear the corresponding state and bail
+    if (clean.length === 0) {
+      if (field === "Additional") {
+        setBasicFormData((prev: any) => ({ ...prev, additionalPhotos: [] }));
+      } else if (field === "Door") {
+        setFormData((prev) => ({ ...prev, doorPhoto: [] }));
+      } else if (field === "Floor") {
+        setBasicFormData((prev: any) => ({ ...prev, floorPlan: [] }));
+      }
+      return;
+    }
+
+    // Split into already-remote vs local-to-upload
+    const isRemote = (u: string) => /^https?:\/\//i.test(u);
+    const local = clean.filter((u) => !isRemote(u));
+    const uploaded = (
+      await Promise.all(local.map((u) => uploadImageAPI([u], field)))
+    ).filter(Boolean) as string[];
+
+    // Rebuild final array in original order: replace local items with uploaded (1:1)
+    let upIdx = 0;
+    const finalList = clean
+      .map((u) => (isRemote(u) ? u : uploaded[upIdx++]))
+      .filter(Boolean) as string[];
+
+    // De-dupe while preserving order
+    const finalUnique = Array.from(new Set(finalList));
+
+    // Write back to the right slice of state
+    switch (field) {
+      case "Floor":
+        // single image: keep only the most recent selection
+        setBasicFormData((prev: any) => ({
+          ...prev,
+          floorPlan: [finalUnique[finalUnique.length - 1]],
+        }));
+        break;
+      case "Door":
+        setFormData((prev) => ({ ...prev, doorPhoto: finalUnique }));
+        break;
+      case "Additional":
+        setBasicFormData((prev: any) => ({
+          ...prev,
+          additionalPhotos: finalUnique,
+        }));
+        break;
     }
   };
 
@@ -823,7 +889,7 @@ const ViewSurvey: React.FC = () => {
         // ✅ isView: only editable if mode === 'edit'
         // setIsView(mode === "edit" ? false : true);
 
-        const fd: FormData = {
+        const fd: InspectionFormData = {
           doorNumber: data.inspectedDoorDto.doorNumber,
           doorType: data.inspectedDoorDto.doorTypeId,
           doorTypeName: data.inspectedDoorDto.doorTypeName,
@@ -997,15 +1063,20 @@ const ViewSurvey: React.FC = () => {
           handleFormDataChange={handleFormDataChange}
           handleGapsChange={() => {}}
           handleComplianceToggle={handleComplianceToggle}
+          handleComplianceActionFieldsChange={(key, type, val) =>
+            handleComplianceActionFieldsChange(key as ComplianceKey, type, val)
+          }
           handleImagesChange={handleImagesChange}
           handleImagesChangeMini={handleImagesChangeMini}
           handleDeleteImages={handleDeleteImages}
-          handleResetAction={(key: string) => handleResetAction(key)}
+          // handleResetAction={(key: string) => handleResetAction(key)}
+                handleResetAction={(key) => handleResetAction(key)}
+
           handleActionFieldsChange={(
-            key: string,
-            value: string,
-            type: string
-          ) => handleActionFieldsChange(key, value, type)}
+            field: string,
+            type: string,
+            value: string
+          ) => handleActionFieldsChange(field, type, value)}
           handleFireResistanceChange={() => {}}
           generateQRCode={() => {}}
           setShowScanQRCode={() => {}}

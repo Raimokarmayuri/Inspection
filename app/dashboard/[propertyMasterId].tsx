@@ -18,6 +18,7 @@ import {
 } from "react-native";
 
 import * as FileSystem from "expo-file-system";
+import * as Print from "expo-print";
 import { useSelector } from "react-redux";
 import {
   GENERATEQRCODE_API,
@@ -85,42 +86,14 @@ const Dashboard = () => {
   const [loadingQR, setLoadingQR] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-  const [highlightDoor, setHighlightDoor] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const scrollRef = useRef<ScrollView>(null);
   // const mandatoryFieldRef = useRef<Record<string, any>>({}); // you’re already using this
+  const [showMiniErrors, setShowMiniErrors] = useState(false);
 
-  // const [actionImages, setActionImages] = useState<{
-  //   [key: string]: { url: string; name: string }[];
-  // }>({});
-  const [photos, setPhotos] = useState<{ uri: string }[]>([]);
-  const [physicalFields, setPhysicalFields] = useState({
-    doorWidth: "",
-    doorHeight: "",
-    doorMaterial: "",
-    // add all your required fields
-  });
-  const [selectedItems, setSelectedItems] = useState({
-    fireResistance: "",
-    smokeSealType: "",
-    doorType: "",
-    // whatever you're collecting from dropdowns
-  });
   const [actionImages, setActionImages] = useState<Record<string, string[]>>(
     {}
   );
-
-  // const [basicInfo, setBasicInfo] = useState({
-  //   buildingName: "",
-  //   uniqueRef: "",
-  //   date: new Date().toISOString().split("T")[0],
-  //   location: "",
-  //   floor: "",
-  //   // floorPlan: "",
-  //     floorPlan: string;
-  //     floorPlan: [] as string[], // 👈 change here
-
-  // });
 
   interface BasicInfo {
     buildingName: string;
@@ -215,7 +188,6 @@ const Dashboard = () => {
       setDate(selectedDate);
     }
   };
-  const [floorPlanImages, setFloorPlanImages] = useState<string[]>([]);
 
   const [isColdSeals, setIsColdSeals] = useState(false);
   const [actionmenuFlag, setActionMenuFlag] = useState<{
@@ -327,32 +299,6 @@ const Dashboard = () => {
     }
   };
 
-  // const pickImage = async (field: string) => {
-  //   let result = await ImagePicker.launchImageLibraryAsync({
-  //     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-  //     quality: 0.8,
-  //     base64: true,
-  //   });
-
-  //   if (!result.canceled && result.assets?.length > 0) {
-  //     const asset = result.assets[0];
-  //     const uri = asset.base64
-  //       ? `data:image/jpeg;base64,${asset.base64}`
-  //       : asset.uri;
-
-  //     if (field === "floorPlan") {
-  //       // Upload the image
-  //       const uploadedUrl = await uploadImageAPI([uri], "Floor");
-  //       if (uploadedUrl) {
-  //         setBasicInfo((prev) => ({
-  //           ...prev,
-  //           floorPlan: [...(prev.floorPlan || []), uploadedUrl],
-  //         }));
-  //       }
-  //     }
-  //   }
-  // };
-
   const BASE_MEASURES: Record<string, number> = {
     head: 3,
     hinge: 3,
@@ -427,33 +373,31 @@ const Dashboard = () => {
   const [complianceCheck, setComplianceCheck] =
     useState<Record<string, any>>(COMPLIANCE_CHECK);
 
-  // const [complianceCheck, setComplianceCheck] = useState<ComplianceCheck>(COMPLIANCE_CHECK);
+  // const handleFireResistanceChange = (value: string) => {
+  //   setFormData((prev) => ({
+  //     ...prev,
+  //     fireResistance: value,
+  //   }));
 
-  const handleFireResistanceChange = (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      fireResistance: value,
-    }));
+  //   const thresholdVal = Number(formData.threshold);
 
-    const thresholdVal = Number(formData.threshold);
+  //   if (value === "1") {
+  //     setActionMenuFlag({
+  //       threshold: !!formData.threshold && thresholdVal < 10,
+  //     });
+  //   } else {
+  //     setActionMenuFlag({
+  //       threshold:
+  //         !!formData.threshold && thresholdVal !== BASE_MEASURES.threshold,
+  //     });
+  //   }
 
-    if (value === "1") {
-      setActionMenuFlag({
-        threshold: !!formData.threshold && thresholdVal < 10,
-      });
-    } else {
-      setActionMenuFlag({
-        threshold:
-          !!formData.threshold && thresholdVal !== BASE_MEASURES.threshold,
-      });
-    }
-
-    if (["5", "6", "7"].includes(value)) {
-      setIsColdSeals(true);
-    } else {
-      setIsColdSeals(false);
-    }
-  };
+  //   if (["5", "6", "7"].includes(value)) {
+  //     setIsColdSeals(true);
+  //   } else {
+  //     setIsColdSeals(false);
+  //   }
+  // };
 
   const handleGapsChange = (name: string, value: string) => {
     resetIndividualField(name);
@@ -513,61 +457,6 @@ const Dashboard = () => {
 
     setActionMenuFlag((prev) => ({ ...prev, [name]: show }));
   };
-
-  // const uploadImageAPIMini = async (
-  //   uri: string,
-  //   field: string,
-  //   userObj: { token?: string }
-  // ): Promise<string> => {
-  //   try {
-  //     if (!userObj?.token) {
-  //       console.warn("No auth token found");
-  //       return "";
-  //     }
-
-  //     let filePart: { uri?: string; name: string; type: string } | File;
-  //     let name = `${field}_Image_${Date.now()}.jpg`;
-  //     let type = "image/jpeg";
-
-  //     if (Platform.OS === "web") {
-  //       // uri can be data:, blob:, or http(s)
-  //       const res = await fetch(uri);
-  //       const blob = await res.blob();
-  //       type = blob.type || type;
-  //       filePart = new File([blob], name, { type });
-  //     } else {
-  //       const parts = await normaliseForUpload(uri, field);
-  //       name = parts.name;
-  //       type = parts.type;
-  //       filePart = { uri: parts.uri, name, type } as any;
-  //     }
-
-  //     const form = new FormData();
-  //     form.append("File", filePart as any, name);
-  //     form.append("Client", "ABC");
-  //     form.append("Property", "Candor");
-  //     form.append("InspectionDate", new Date().toISOString());
-
-  //     const resp = await fetch(`${hostName}api/Inspection/upload`, {
-  //       method: "POST",
-  //       headers: { Authorization: `Bearer ${userObj.token}` },
-  //       body: form,
-  //     });
-
-  //     if (!resp.ok) {
-  //       const text = await resp.text().catch(() => "");
-  //       console.error("Upload failed:", resp.status, text);
-  //       return "";
-  //     }
-
-  //     const data = await resp.json().catch(() => ({} as any));
-  //     // server returns { result: { blobUrl: "https://..." } }
-  //     return data?.result?.blobUrl || "";
-  //   } catch (e) {
-  //     console.error("uploadImageAPIMini error:", e);
-  //     return "";
-  //   }
-  // };
 
   const handleImagesChangeMini = async (
     newImages: string[],
@@ -634,11 +523,6 @@ const Dashboard = () => {
     return input.replace(/[^a-zA-Z0-9 !?.,"'() & :; -]/g, ""); // Keeps letters, numbers, and spaces
   };
 
-  // const mandatoryFieldRef = useRef({});
-  // const mandatoryFieldRef = useRef<Record<string, TextInput | null>>({
-  //   hingeLocation: null,
-  // });
-  // const mandatoryFieldRef = useRef<Record<string, TextInput | null>>({});
   const mandatoryFieldRef = useRef<Record<string, any>>({}); // you’re already using this
 
   const resetIndividualField = (field: string | number) => {
@@ -668,9 +552,7 @@ const Dashboard = () => {
         return "";
     }
   };
-  // ...existing code...
 
-  // ...existing code...
   const handleActionFieldsChange = (
     e: any,
     field: string,
@@ -799,68 +681,62 @@ const Dashboard = () => {
     }
   };
 
-  const handlePrint = (qrCode: string, formData: { doorNumber: string }) => {
-    const printWindow = window.open("", "_blank");
-
-    if (!printWindow) {
-      console.error("Failed to open print window.");
-      return;
-    }
-
+  const handlePrint = async (
+    qrCode: string,
+    formData: { doorNumber: string }
+  ) => {
     const htmlContent = `
     <html>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style>
-          body { font-family: Arial, sans-serif; }
+          body { font-family: Arial, sans-serif; margin: 40px; }
           .print-container { text-align: center; }
-          .modal-header { background-color: gray; color: white; padding: 10px; }
+          img { max-width: 100%; height: auto; }
+          h3 { margin-top: 16px; }
         </style>
       </head>
       <body>
-        <div class="print-container" style="margin-top:100px">
-          <img src="${qrCode}" alt="QR Code" height="400px" width="400px" />
+        <div class="print-container">
+          <img src="${qrCode}" alt="QR Code" width="400" height="400" />
           <h3>Door Reference Number: ${formData.doorNumber}</h3>
         </div>
       </body>
     </html>
   `;
 
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    try {
+      if (Platform.OS === "web") {
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+          alert("Pop-up blocked. Please allow pop-ups to print.");
+          return;
+        }
+        printWindow.document.open();
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.focus();
+          printWindow.print();
+          printWindow.close();
+        };
+      } else {
+        // Option A: open native print dialog directly
+        await Print.printAsync({ html: htmlContent });
 
-    // Wait for content to load before printing
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.close();
-    };
+        // Option B: create a PDF and let the user share/save it
+        // const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        // await Sharing.shareAsync(uri, { UTI: "com.adobe.pdf", mimeType: "application/pdf" });
+      }
+    } catch (err: any) {
+      console.error("Print error:", err);
+      Alert.alert("Print error", err?.message ?? String(err));
+    }
   };
 
   if (loading) {
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
   }
-
-  const manualComplianceIds: Record<string, string> = {
-    complianceCheckMasterID: "f54b5067-b68d-43b7-83cd-239dcedc5976",
-  };
-
-  const getBase64FromUri = async (uri: string): Promise<string> => {
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return `data:image/jpeg;base64,${base64}`;
-  };
-
-  const base64ToFile = (base64String: string, filename: string): File => {
-    const arr = base64String.split(",");
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) u8arr[n] = bstr.charCodeAt(n);
-    return new File([u8arr], filename, { type: mime });
-  };
 
   const uploadImageAPI = async (
     newImages: string[],
@@ -965,12 +841,96 @@ const Dashboard = () => {
     }
   };
 
+  // nice labels for alert lines
+  const LABELS: Record<string, string> = {
+    head: "Head",
+    hinge: "Hinge",
+    closing: "Closing",
+    threshold: "Threshold",
+    doorThickness: "Door Thickness",
+    frameDepth: "Frame Depth",
+    doorSize: "Door Size",
+    fullDoorsetSize: "Full Doorset Size",
+    intumescentStrips: "Intumescent Strips",
+    coldSmokeSeals: "Cold Smoke Seals",
+    fireLockedSign: "Keep Locked Sign",
+    fireShutSign: "Keep Shut Sign",
+    pyroGlazing: "Pyro Glazing",
+  };
+
+  // given form object and a prefix, tell which MiniCapture fields are missing
+  const requiredMiniErrorsForPrefix = (obj: any, prefix: string): string[] => {
+    const val = (k: string) => String(obj?.[`${prefix}${k}`] ?? "").trim();
+    const isMissing = (v: string) => v === "" || v === "Select"; // 👈 key change
+
+    const sev = val("Severity");
+    const cat = val("Category");
+    const due = val("DueDate");
+    const rem = val("Remediation");
+
+    const errs: string[] = [];
+    if (isMissing(sev)) errs.push("Severity");
+    if (isMissing(cat)) errs.push("Category");
+    if (isMissing(due)) errs.push("Due Date");
+    if (cat !== "5" && rem.trim() === "") errs.push("Remediation");
+    return errs;
+  };
+
+  // build one list of all missing MiniCapture requirements (physical + compliance)
+  const collectMiniCaptureMissing = (): string[] => {
+    const lines: string[] = [];
+    const title = (k: string) => LABELS[k] || k;
+
+    // PHYSICAL: any gap where action menu is showing
+    Object.keys(actionmenuFlag).forEach((k) => {
+      if (actionmenuFlag[k]) {
+        const missing = requiredMiniErrorsForPrefix(formData, k);
+        if (missing.length) lines.push(`${title(k)}: ${missing.join(", ")}`);
+      }
+    });
+
+    // COMPLIANCE: only for items that show MiniCapture AND are toggled to "No"
+    const complianceCandidates = [
+      "intumescentStrips",
+      "coldSmokeSeals",
+      "fireLockedSign",
+      "fireShutSign",
+      "pyroGlazing",
+    ] as const;
+
+    complianceCandidates.forEach((key) => {
+      const fireRes = String(formData.fireResistance ?? "");
+      const showColdSmoke = ["5", "6", "7"].includes(fireRes);
+      const showPyro =
+        complianceCheck["doorGlazing"] === true && isGlazing === true;
+
+      const shouldShow =
+        complianceCheck[key] === false &&
+        (key !== "coldSmokeSeals" || showColdSmoke) &&
+        (key !== "pyroGlazing" || showPyro);
+
+      if (shouldShow) {
+        const missing = requiredMiniErrorsForPrefix(complianceCheck, key);
+        if (missing.length) lines.push(`${title(key)}: ${missing.join(", ")}`);
+      }
+    });
+
+    return lines;
+  };
+
   const validateAndSubmit = async () => {
     const e: Record<string, string> = {};
+
+    if (Object.keys(e).length) {
+      setErrors(e);
+      focusFirstError(e);
+      return;
+    }
 
     // Basic requireds
     if (isEmpty(basicInfo.floor)) e.floor = "Floor is required";
     if (isEmpty(formData.doorType)) e.doorType = "Door Type is required";
+    if (isEmpty(formData.doorPhoto)) e.doorType = "Door Photo is required";
     if (isEmpty(formData.doorNumber)) e.doorNumber = "Door Number is required";
     if (isEmpty(formData.hingeLocation))
       e.hingeLocation = "Hinge Location is required";
@@ -1006,6 +966,16 @@ const Dashboard = () => {
       return;
     }
 
+    // ✅ Now validate MiniCapture blocks
+    setShowMiniErrors(true); // makes MiniCapture show its inline red messages
+    const miniIssues = collectMiniCaptureMissing();
+    if (miniIssues.length) {
+      showAlert(
+        "Missing required action details",
+        `Please complete:\n\n• ${miniIssues.join("\n• ")}`
+      );
+      return;
+    }
     setErrors({});
     // proceed with your existing submit
     handleSubmit();
@@ -1220,29 +1190,12 @@ const Dashboard = () => {
             editable={false}
           />
 
-          {/* <Text style={styles.label}>Date</Text>
+          <Text style={styles.label}>Date</Text>
           <TextInput
             style={styles.input}
             value={basicInfo.date}
             editable={false}
-          /> */}
-          <Text style={{ marginBottom: 5 }}>Date</Text>
-
-          <TouchableOpacity onPress={() => setShowPicker(true)}>
-            <TextInput
-              style={{
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 5,
-                padding: 10,
-                height: 45,
-                backgroundColor: "#fff",
-              }}
-              value={formatDate(date)}
-              editable={false}
-              pointerEvents="none"
-            />
-          </TouchableOpacity>
+          />
 
           {showPicker && (
             <DateTimePicker
@@ -1262,14 +1215,6 @@ const Dashboard = () => {
             editable={false}
           />
 
-          {/* <Text style={styles.label}>Floor*</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.floor}
-            onChangeText={(text) =>
-              setBasicInfo((prev) => ({ ...prev, floor: text }))
-            }
-          /> */}
           <Text style={styles.label}>Floor*</Text>
           <TextInput
             ref={(ref) => {
@@ -1300,68 +1245,12 @@ const Dashboard = () => {
             <Text style={styles.errorText}>{errors.floorPlan}</Text>
           )}
 
-          {/* <TouchableOpacity
-            style={styles.button}
-            onPress={() => pickImage("floorPlan")}
-          >
-            <Text>Choose File</Text>
-            <Text style={styles.cameraIcon}>📷</Text>
-          </TouchableOpacity>
-          {basicInfo.floorPlan.map((imgUri, index) => (
-            <Image
-              key={index}
-              source={{ uri: imgUri }}
-              style={styles.preview}
-            />
-          ))} */}
-
           <Text style={styles.label}>Door Number</Text>
           <TextInput
             style={styles.input}
             value={formData.doorNumber}
             editable={false}
           />
-
-          {/* <Text style={styles.label}>Door Type*</Text>
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 6,
-              backgroundColor: "#e9f1fb",
-              overflow: "hidden",
-              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
-              justifyContent: "center",
-              marginTop: 8,
-            }}
-          >
-            <Picker
-              selectedValue={formData.doorType}
-              onValueChange={(value) => handleFormDataChange("doorType", value)}
-              // enabled={!isView} // Disable in view mode
-              dropdownIconColor="#034694"
-              style={{
-                width: "100%",
-                backgroundColor: "#e9f1fb",
-                color: "#034694",
-                fontSize: 16,
-              }}
-              itemStyle={{
-                fontSize: 16,
-                color: "#034694", // Color of items when opened (mostly affects iOS)
-              }}
-              mode="dropdown" // or "dialog" on Android
-            >
-              <Picker.Item label="Select" value="" />
-              {doorOptions.map((opt) => (
-                <Picker.Item
-                  key={opt.doorTypeId}
-                  label={opt.doorTypeName}
-                  value={opt.doorTypeId}
-                />
-              ))}
-            </Picker>
-          </View> */}
 
           <Text style={styles.label}>Door Type*</Text>
           <View
@@ -1409,47 +1298,6 @@ const Dashboard = () => {
             <Text style={styles.errorText}>{errors.doorType}</Text>
           )}
 
-          {/* <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#ccc",
-              borderRadius: 6,
-              backgroundColor: "#e9f1fb",
-              overflow: "hidden",
-              height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
-              justifyContent: "center",
-              marginTop: 8,
-            }}
-          >
-            <Picker
-              selectedValue={formData.doorType}
-              onValueChange={(value) => handleFormDataChange("doorType", value)}
-              // enabled={!isView} // Disable in view mode
-              dropdownIconColor="#034694"
-              style={{
-                width: "100%",
-                backgroundColor: "#e9f1fb",
-                color: "#034694",
-                fontSize: 16,
-              }}
-              itemStyle={{
-                fontSize: 16,
-                color: "#034694", // Color of items when opened (mostly affects iOS)
-              }}
-              mode="dropdown" // or "dialog" on Android
-            >
-              <Picker.Item label="Select" value="" color="#999" />
-              {doorOptions.map((type) => (
-                <Picker.Item
-                  key={type.doorTypeId}
-                  label={type.doorTypeName}
-                  value={String(type.doorTypeId)}
-                  color="#034694"
-                />
-              ))}
-            </Picker>
-          </View> */}
-
           {doorOtherFlag && (
             <>
               <Text style={styles.label}>Other Door Type*</Text>
@@ -1475,20 +1323,6 @@ const Dashboard = () => {
             mandatoryFieldRef={mandatoryFieldRef}
             allowGallery={true} // ✅ add this to let Capture also open gallery
           />
-
-          {/* <TouchableOpacity
-            style={styles.button}
-            onPress={() => pickImage("doorPhoto")}
-          >
-            <Text>Choose File</Text>
-            <Text style={styles.cameraIcon}>📷</Text>
-          </TouchableOpacity>
-          {formData.doorPhoto && (
-            <Image
-              source={{ uri: formData.doorPhoto }}
-              style={styles.preview}
-            />
-          )} */}
         </View>
 
         {/* QR CODE SECTION */}
@@ -1539,283 +1373,326 @@ const Dashboard = () => {
           )}
         </View>
 
-        <Text style={styles.label}>Fire Rating and Certification*</Text>
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: "#ccc",
-            borderRadius: 6,
-            backgroundColor: "#e9f1fb",
-            overflow: "hidden",
-            height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
-            justifyContent: "center",
-            marginTop: 8,
-          }}
-        >
-          <Picker
-            selectedValue={String(formData?.fireResistance ?? "")} // ✅ force string
-            onValueChange={(value) =>
-              handleFormDataChange("fireResistance", value)
-            }
-            // enabled={!isView}
-            dropdownIconColor="#034694"
-            style={{
-              width: "100%",
-              backgroundColor: "#e9f1fb",
-              color: "#034694",
-              fontSize: 16,
-            }}
+        <View style={styles.card}>
+          <Text style={styles.label}>Fire Rating and Certification*</Text>
+          <View
+            style={[
+              {
+                borderWidth: 1,
+                borderColor: "#ccc",
+                borderRadius: 6,
+                backgroundColor: "#e9f1fb",
+                overflow: "hidden",
+                height: Platform.OS === "ios" ? 200 : 48,
+                justifyContent: "center",
+                marginTop: 8,
+              },
+              errors.fireResistance && styles.errorInput, // red border when invalid
+            ]}
           >
-            <Picker.Item label="Select" value="" color="#999" />
-            <Picker.Item label="FD30" value="1" color="#034694" />
-            <Picker.Item label="FD60" value="2" color="#034694" />
-            <Picker.Item label="FD90" value="3" color="#034694" />
-            <Picker.Item label="FD120" value="4" color="#034694" />
-            <Picker.Item label="FD30S" value="5" color="#034694" />
-            <Picker.Item label="FD60S" value="6" color="#034694" />
-            <Picker.Item label="FD90S" value="7" color="#034694" />
-            <Picker.Item label="FD120S" value="8" color="#034694" />
-          </Picker>
+            <Picker
+              selectedValue={String(formData?.fireResistance ?? "")} // ✅ force string
+              onValueChange={(value) =>
+                handleFormDataChange("fireResistance", value)
+              }
+              // enabled={!isView}
+              dropdownIconColor="#034694"
+              style={{
+                width: "100%",
+                backgroundColor: "#e9f1fb",
+                color: "#034694",
+                fontSize: 16,
+              }}
+            >
+              <Picker.Item label="Select" value="" color="#999" />
+              <Picker.Item label="FD30" value="1" color="#034694" />
+              <Picker.Item label="FD60" value="2" color="#034694" />
+              <Picker.Item label="FD90" value="3" color="#034694" />
+              <Picker.Item label="FD120" value="4" color="#034694" />
+              <Picker.Item label="FD30S" value="5" color="#034694" />
+              <Picker.Item label="FD60S" value="6" color="#034694" />
+              <Picker.Item label="FD90S" value="7" color="#034694" />
+              <Picker.Item label="FD120S" value="8" color="#034694" />
+            </Picker>
+          </View>
         </View>
         {/* Physical Measurements Section */}
 
-        <Text style={styles.label}>Physical Measurements - Gaps</Text>
+        <View style={styles.card}>
+          <Text style={styles.label}>Physical Measurements - Gaps</Text>
 
-        {[
-          { key: "head", label: "Head (mm)" },
-          { key: "hinge", label: "Hinge (mm)" },
-          { key: "closing", label: "Closing (mm)" },
-          { key: "threshold", label: "Threshold (mm)" },
-          { key: "doorThickness", label: "Door Thickness (mm)" },
-          { key: "frameDepth", label: "Frame Depth (mm)" },
-          { key: "doorSize", label: "Door Size (mm)" },
-          { key: "fullDoorsetSize", label: "Full Doorset Size (mm)" },
-        ].map(({ key, label }) => (
-          <View key={key}>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.label}>
-                {label} <Text style={{ color: "red" }}>*</Text>
-              </Text>
+          {[
+            { key: "head", label: "Head (mm)" },
+            { key: "hinge", label: "Hinge (mm)" },
+            { key: "closing", label: "Closing (mm)" },
+            { key: "threshold", label: "Threshold (mm)" },
+            { key: "doorThickness", label: "Door Thickness (mm)" },
+            { key: "frameDepth", label: "Frame Depth (mm)" },
+            { key: "doorSize", label: "Door Size (mm)" },
+            { key: "fullDoorsetSize", label: "Full Doorset Size (mm)" },
+          ].map(({ key, label }) => (
+            <View key={key}>
+              <View style={styles.inputWrapper}>
+                <Text style={styles.label}>
+                  {label} <Text style={{ color: "red" }}>*</Text>
+                </Text>
 
-              <TextInput
-                ref={(ref) => {
-                  if (ref) mandatoryFieldRef.current[key] = ref;
-                }}
-                style={[styles.input, errors[key] && styles.errorInput]}
-                keyboardType={Platform.OS === "ios" ? "decimal-pad" : "numeric"}
-                value={formData[key as FormDataKey]?.toString() ?? ""}
-                onChangeText={(val) => {
-                  const normalized = val
-                    .replace(/,/g, ".") // comma → dot
-                    .replace(/[^\d.]/g, "") // keep digits and dots
-                    .replace(/^(\d*\.\d*).*$/, "$1"); // keep only first dot
-                  handleGapsChange(key, normalized);
-                }}
-                placeholder={label}
-              />
-              {errors[key] && (
-                <Text style={styles.errorText}>{errors[key]}</Text>
-              )}
+                <TextInput
+                  ref={(ref) => {
+                    if (ref) mandatoryFieldRef.current[key] = ref;
+                  }}
+                  style={[styles.input, errors[key] && styles.errorInput]}
+                  keyboardType={
+                    Platform.OS === "ios" ? "decimal-pad" : "numeric"
+                  }
+                  value={formData[key as FormDataKey]?.toString() ?? ""}
+                  onChangeText={(val) => {
+                    const normalized = val
+                      .replace(/,/g, ".") // comma → dot
+                      .replace(/[^\d.]/g, "") // keep digits and dots
+                      .replace(/^(\d*\.\d*).*$/, "$1"); // keep only first dot
+                    handleGapsChange(key, normalized);
+                  }}
+                  placeholder={label}
+                />
+                {errors[key] && (
+                  <Text style={styles.errorText}>{errors[key]}</Text>
+                )}
 
-              {actionmenuFlag[key] && (
-                <View style={styles.captureBox}>
-                  <MiniCapture
-                    fieldValue={key}
-                    formData={formData}
-                    onImagesChange={(images) =>
-                      handleImagesChangeMini(images, key)
-                    }
-                    onResetChange={() => handleResetAction(key, "PHYSICAL")}
-                    onHandleActionFieldsChange={(val, type) =>
-                      handleActionFieldsChange(
-                        { target: { name: type, value: val } },
-                        key,
-                        "PHYSICAL"
-                      )
-                    }
-                    onImageDelete={(index) => handleDeleteImages(index, key)}
-                    reset={resetCaptureFlag}
-                    mandatoryFieldRef={mandatoryFieldRef}
-                    isView={false}
-                    savedImages={actionImages[key] || []}
-                    forceShow={actionmenuFlag[key]} // ✅ tell MiniCapture to show at 3.1
-                  />
+                {actionmenuFlag[key] && (
+                  <View style={styles.captureBox}>
+                    <MiniCapture
+                      fieldValue={key}
+                      formData={formData}
+                      onImagesChange={(images) =>
+                        handleImagesChangeMini(images, key)
+                      }
+                      onResetChange={() => handleResetAction(key, "PHYSICAL")}
+                      onHandleActionFieldsChange={(val, type) =>
+                        handleActionFieldsChange(
+                          { target: { name: type, value: val } },
+                          key,
+                          "PHYSICAL"
+                        )
+                      }
+                      onImageDelete={(index) => handleDeleteImages(index, key)}
+                      reset={resetCaptureFlag}
+                      mandatoryFieldRef={mandatoryFieldRef}
+                      isView={false}
+                      savedImages={actionImages[key] || []}
+                      forceShow={actionmenuFlag[key]} // ✅ tell MiniCapture to show at 3.1
+                      showErrors={showMiniErrors}
+                    />
 
-                  {(formData as any)[`${key}Severity`] &&
-                    (formData as any)[`${key}Severity`] !== "Select" && (
-                      <View style={{ marginTop: 8 }}>
-                        <Text style={styles.label}>Due Date</Text>
-                        <TextInput
-                          style={styles.input}
-                          value={(formData as any)[`${key}DueDate`] || ""}
-                          editable={false}
-                        />
-                      </View>
+                    {(formData as any)[`${key}Severity`] &&
+                      (formData as any)[`${key}Severity`] !== "Select" && (
+                        <View style={{ marginTop: 8 }}>
+                          <Text style={styles.label}>Due Date</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={(formData as any)[`${key}DueDate`] || ""}
+                            editable={false}
+                          />
+                        </View>
+                      )}
+                  </View>
+                )}
+              </View>
+
+              {/* 👇 Add hingeLocation Picker just after 'head' field */}
+              {key === "head" && (
+                <View>
+                  <Text style={styles.label}>
+                    Hinge Location <Text style={{ color: "red" }}>*</Text>
+                  </Text>
+                  <View
+                    style={[
+                      {
+                        borderWidth: 1,
+                        borderColor: "#ccc",
+                        borderRadius: 6,
+                        backgroundColor: "#e9f1fb",
+                        overflow: "hidden",
+                        height: Platform.OS === "ios" ? 200 : 48,
+                        justifyContent: "center",
+                        marginTop: 8,
+                      },
+                      !!errors?.hingeLocation && styles.errorInput,
+                    ]}
+                  >
+                    <Picker
+                      selectedValue={formData?.hingeLocation ?? ""}
+                      onValueChange={(value) =>
+                        handleFormDataChange("hingeLocation", value)
+                      }
+                      // enabled={!isView}
+                      dropdownIconColor="#034694"
+                      style={{
+                        color: "#034694", // ✅ Text color
+                        fontSize: 16,
+                        width: "100%",
+                        backgroundColor: "#e9f1fb",
+                      }}
+                    >
+                      <Picker.Item label="Select" value="" color="#999" />
+                      <Picker.Item label="Left" value="1" color="#034694" />
+                      <Picker.Item label="Right" value="2" color="#034694" />
+                    </Picker>
+                    {errors?.hingeLocation && (
+                      <Text style={styles.errorText}>
+                        {errors.hingeLocation}
+                      </Text>
                     )}
+                  </View>
                 </View>
               )}
             </View>
-
-            {/* 👇 Add hingeLocation Picker just after 'head' field */}
-            {key === "head" && (
-              <View>
-                <Text style={styles.label}>
-                  Hinge Location <Text style={{ color: "red" }}>*</Text>
-                </Text>
-                <View
-                  style={{
-                    borderWidth: 1,
-                    borderColor: "#ccc",
-                    borderRadius: 6,
-                    backgroundColor: "#e9f1fb",
-                    overflow: "hidden",
-                    height: Platform.OS === "ios" ? 200 : 48, // ✅ iOS fix: give enough height
-                    justifyContent: "center",
-                    marginTop: 8,
-                  }}
-                >
-                  <Picker
-                    selectedValue={formData?.hingeLocation ?? ""}
-                    onValueChange={(value) =>
-                      handleFormDataChange("hingeLocation", value)
-                    }
-                    // enabled={!isView}
-                    dropdownIconColor="#034694"
-                    style={{
-                      color: "#034694", // ✅ Text color
-                      fontSize: 16,
-                      width: "100%",
-                      backgroundColor: "#e9f1fb",
-                    }}
-                  >
-                    <Picker.Item label="Select" value="" color="#999" />
-                    <Picker.Item label="Left" value="1" color="#034694" />
-                    <Picker.Item label="Right" value="2" color="#034694" />
-                  </Picker>
-                </View>
-              </View>
-            )}
-          </View>
-        ))}
+          ))}
+        </View>
 
         {/* === Compliance Check (MiniCapture shows when value is FALSE) === */}
         <View style={styles.card}>
-  <Text style={styles.sectionTitle}>Compliance Check</Text>
+          <Text style={styles.sectionTitle}>Compliance Check</Text>
 
-  {(() => {
-    type ComplianceKey =
-      | "intumescentStrips"
-      | "coldSmokeSeals"
-      | "selfClosingDevice"
-      | "fireLockedSign"
-      | "fireShutSign"
-      | "holdOpenDevice"
-      | "visibleCertification"
-      | "doorGlazing"
-      | "pyroGlazing";
+          {(() => {
+            type ComplianceKey =
+              | "intumescentStrips"
+              | "coldSmokeSeals"
+              | "selfClosingDevice"
+              | "fireLockedSign"
+              | "fireShutSign"
+              | "holdOpenDevice"
+              | "visibleCertification"
+              | "doorGlazing"
+              | "pyroGlazing";
 
-    const miniEnabled: ComplianceKey[] = [
-      "intumescentStrips",
-      "coldSmokeSeals",
-      "fireLockedSign",
-      "fireShutSign",
-      "pyroGlazing",
-    ];
+            const miniEnabled: ComplianceKey[] = [
+              "intumescentStrips",
+              "coldSmokeSeals",
+              "fireLockedSign",
+              "fireShutSign",
+              "pyroGlazing",
+            ];
 
-    let showFireLockedSign =
-      complianceCheck["selfClosingDevice"] === false; // rule 1
+            let showFireLockedSign =
+              complianceCheck["selfClosingDevice"] === false; // rule 1
 
-    let showPyroGlazing =
-      complianceCheck["doorGlazing"] === true && isGlazing; // rule 2
+            let showPyroGlazing =
+              complianceCheck["doorGlazing"] === true && isGlazing; // rule 2
 
-    const items: { key: ComplianceKey; label: string; show?: boolean }[] = [
-      { key: "intumescentStrips", label: "Are there intumescent strips?" },
-      {
-        key: "coldSmokeSeals",
-        label: "Are there cold smoke seals?",
-        show:
-          formData.fireResistance === "5" ||
-          formData.fireResistance === "6" ||
-          formData.fireResistance === "7",
-      },
-      { key: "selfClosingDevice", label: "Self closing device?" },
-      {
-        key: "fireLockedSign",
-        label: "Fire door Keep Locked sign?",
-        show: showFireLockedSign,
-      },
-      { key: "fireShutSign", label: "Fire door Keep Shut sign?" },
-      { key: "holdOpenDevice", label: "Is there a hold open device?" },
-      {
-        key: "visibleCertification",
-        label: "Is certification visible on fire door?",
-      },
-      { key: "doorGlazing", label: "Does the door contain glazing?",
-        // show: showPyroGlazing,
-       },
-      {
-        key: "pyroGlazing",
-        label: "Is glazing pyro glazing?",
-        show: showPyroGlazing,
-      },
-    ];
+            const items: {
+              key: ComplianceKey;
+              label: string;
+              show?: boolean;
+            }[] = [
+              {
+                key: "intumescentStrips",
+                label: "Are there intumescent strips?",
+              },
+              {
+                key: "coldSmokeSeals",
+                label: "Are there cold smoke seals?",
+                show:
+                  formData.fireResistance === "5" ||
+                  formData.fireResistance === "6" ||
+                  formData.fireResistance === "7",
+              },
+              { key: "selfClosingDevice", label: "Self closing device?" },
+              {
+                key: "fireLockedSign",
+                label: "Fire door Keep Locked sign?",
+                show: showFireLockedSign,
+              },
+              { key: "fireShutSign", label: "Fire door Keep Shut sign?" },
+              { key: "holdOpenDevice", label: "Is there a hold open device?" },
+              {
+                key: "visibleCertification",
+                label: "Is certification visible on fire door?",
+              },
+              {
+                key: "doorGlazing",
+                label: "Does the door contain glazing?",
+                // show: showPyroGlazing,
+              },
+              {
+                key: "pyroGlazing",
+                label: "Is glazing pyro glazing?",
+                show: showPyroGlazing,
+              },
+            ];
 
-    return items
-      .filter((i) => i.show === undefined || i.show)
-      .map(({ key, label, show }) => {
-        const allowedByShowFlag = show === undefined || show;
-        const showMini =
-          miniEnabled.includes(key) &&
-          allowedByShowFlag &&
-          complianceCheck[key] === false;
+            return items
+              .filter((i) => i.show === undefined || i.show)
+              .map(({ key, label, show }) => {
+                const allowedByShowFlag = show === undefined || show;
+                const showMini =
+                  miniEnabled.includes(key) &&
+                  allowedByShowFlag &&
+                  complianceCheck[key] === false;
 
-        return (
-          <View key={key} style={{ marginBottom: 16 }}>
-            <View style={styles.complianceRow}>
-              <Text style={styles.label}>{label}</Text>
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>N</Text>
-                <Switch
-                  value={!!complianceCheck[key]}
-                  onValueChange={(val) => handleComplianceToggle(key, val)}
-                />
-                <Text style={styles.switchLabel}>Y</Text>
-              </View>
-            </View>
+                return (
+                  <View key={key} style={{ marginBottom: 16 }}>
+                    <View style={styles.complianceRow}>
+                      <View style={styles.complianceLabelWrap}>
+                        <Text
+                          style={styles.complianceLabel}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {label}
+                        </Text>
+                      </View>
 
-            {showMini && (
-              <View style={styles.captureBox}>
-                <MiniCapture
-                  fieldValue={key}
-                  formData={complianceCheck}
-                  savedImages={actionImages[key] || []}
-                  onImagesChange={(images: string[]) =>
-                    handleImagesChangeMini(images, key)
-                  }
-                  onImageDelete={(index: number) =>
-                    handleDeleteImages(index, key)
-                  }
-                  onResetChange={() => handleResetAction(key, "COMPLIANCE")}
-                  onHandleActionFieldsChange={(val: string, fieldName: string) =>
-                    handleActionFieldsChange(
-                      { target: { name: fieldName, value: val } },
-                      key,
-                      "COMPLIANCE"
-                    )
-                  }
-                  reset={resetCaptureFlag}
-                  mandatoryFieldRef={mandatoryFieldRef}
-                  isView={false}
-                  forceShow={true}
-                />
-              </View>
-            )}
-          </View>
-        );
-      });
-  })()}
-</View>
+                      <View style={styles.switchRow}>
+                        <Text style={styles.switchLabel}>N</Text>
+                        <Switch
+                          value={!!complianceCheck[key]}
+                          onValueChange={(val) =>
+                            handleComplianceToggle(key, val)
+                          }
+                        />
+                        <Text style={styles.switchLabel}>Y</Text>
+                      </View>
+                    </View>
 
+                    {showMini && (
+                      <View style={styles.captureBox}>
+                        <MiniCapture
+                          fieldValue={key}
+                          formData={complianceCheck}
+                          savedImages={actionImages[key] || []}
+                          onImagesChange={(images: string[]) =>
+                            handleImagesChangeMini(images, key)
+                          }
+                          onImageDelete={(index: number) =>
+                            handleDeleteImages(index, key)
+                          }
+                          onResetChange={() =>
+                            handleResetAction(key, "COMPLIANCE")
+                          }
+                          onHandleActionFieldsChange={(
+                            val: string,
+                            fieldName: string
+                          ) =>
+                            handleActionFieldsChange(
+                              { target: { name: fieldName, value: val } },
+                              key,
+                              "COMPLIANCE"
+                            )
+                          }
+                          reset={resetCaptureFlag}
+                          mandatoryFieldRef={mandatoryFieldRef}
+                          isView={false}
+                          forceShow={true}
+                          showErrors={showMiniErrors}
+                        />
+                      </View>
+                    )}
+                  </View>
+                );
+              });
+          })()}
+        </View>
 
         <View
           style={{
@@ -1972,6 +1849,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#f2f2f2",
   },
+
   card: {
     backgroundColor: "#fff",
     borderRadius: 8,
@@ -1988,6 +1866,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 20,
     color: "#222",
+    marginTop: 20,
   },
   label: {
     fontWeight: "600",
@@ -2068,24 +1947,45 @@ const styles = StyleSheet.create({
     color: "#034694",
     fontSize: 16,
   },
+  complianceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+
+  // Wrap for the label so it can shrink and ellipsize
+  complianceLabelWrap: {
+    flex: 1,
+    minWidth: 0, // <-- critical so Text can actually shrink/ellipsize
+  },
+
+  // Optional: a bit smaller than your global .label (which is 20)
+  complianceLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+  },
+
   switchRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 12,
-    marginTop: 6,
+    flexShrink: 0, // <-- don't let the switch group shrink
   },
+
   switchLabel: {
-    fontSize: 20,
+    fontSize: 16,
+    marginHorizontal: 6, // simple, cross-platform spacing
   },
-  complianceRow: {
-    marginBottom: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 16,
-    flexWrap: "wrap",
-  },
+
+  // complianceRow: {
+  //   marginBottom: 16,
+  //   flexDirection: "row",
+  //   justifyContent: "space-between",
+  //   alignItems: "center",
+  //   gap: 16,
+  //   flexWrap: "wrap",
+  // },
 });
 
 export default Dashboard;
@@ -2098,5 +1998,8 @@ function setFloorPlanImages(combined: any[]) {
 }
 
 function setHighlightDoor(arg0: boolean) {
+  throw new Error("Function not implemented.");
+}
+function showAlert(arg0: string, arg1: string) {
   throw new Error("Function not implemented.");
 }

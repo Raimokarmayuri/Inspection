@@ -18,7 +18,7 @@ import {
   ActionMenuFlag,
   BasicFormData,
   ComplianceCheck,
-  FormData,
+  FormData as InspectionFormData,
 } from "../types";
 import Capture from "./Capture";
 import MiniCapture from "./MiniCapture";
@@ -26,7 +26,7 @@ import MiniCapture from "./MiniCapture";
 interface FormProps {
   isView: boolean;
   basicFormData: BasicFormData;
-  formData: FormData;
+  formData: InspectionFormData;
   doorPhoto: string[];
   complianceCheck: ComplianceCheck;
   actionmenuFlag: ActionMenuFlag;
@@ -51,11 +51,18 @@ interface FormProps {
   handleChange: (field: string, value: string) => void;
   handleFormDataChange: (field: string, value: string) => void;
   handleGapsChange: (field: string, value: string) => void;
-  handleComplianceToggle: (field: string) => void;
+handleComplianceToggle: (field: keyof ComplianceCheck, value: boolean) => void;
   handleImagesChange: (images: string[], field: string) => void;
   handleImagesChangeMini: (images: string[], field: string) => void;
   handleDeleteImages: (index: number, field: string) => void;
-  handleResetAction: (field: string, type: string) => void;
+  // handleResetAction: (field: string, type: string) => void;
+  handleResetAction: (field: string) => void;
+  handleComplianceActionFieldsChange: (
+    field: string,
+    type: string,
+    value: string
+  ) => void;
+
   handleActionFieldsChange: (
     field: string,
     type: string,
@@ -68,21 +75,11 @@ interface FormProps {
   handleSubmit: (status?: string) => Promise<void>;
 
   handleValidationOnSave: (status: string) => void;
+
+  errors?: Record<string, string>;
+  onClearError?: (field: string) => void;
 }
 
-const severityMap: Record<string, string> = {
-  "1": "Critical",
-  "2": "High",
-  "3": "Medium",
-  "4": "Low",
-};
-const categoryMap: Record<string, string> = {
-  "1": "Fire door Repair",
-  "2": "Signage repair",
-  "3": "Fire door Replacement",
-  "4": "Testing, Records, Log Book",
-  "5": "Door Replacement required",
-};
 const hingeMap: Record<string, string> = { "1": "Left", "2": "Right" };
 const fireRatingMap: Record<string, string> = {
   "1": "FD30",
@@ -131,6 +128,7 @@ const FormComponent: React.FC<FormProps> = ({
   handleImagesChangeMini,
   handleDeleteImages,
   handleResetAction,
+  handleComplianceActionFieldsChange,
   handleActionFieldsChange,
   handleFireResistanceChange,
   generateQRCode,
@@ -143,87 +141,83 @@ const FormComponent: React.FC<FormProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   // --- Compliance helpers (paste inside the component) ---
-// ---- Compliance helpers ----
-const COMPLIANCE_KEYS = [
-  "intumescentStrips",
-  "coldSmokeSeals",
-  "selfClosingDevice",
-  "fireLockedSign",
-  "fireShutSign",
-  "holdOpenDevice",
-  "visibleCertification",
-  "doorGlazing",
-  "pyroGlazing",
-] as const;
+  // ---- Compliance helpers ----
+  const COMPLIANCE_KEYS = [
+    "intumescentStrips",
+    "coldSmokeSeals",
+    "selfClosingDevice",
+    "fireLockedSign",
+    "fireShutSign",
+    "holdOpenDevice",
+    "visibleCertification",
+    "doorGlazing",
+    "pyroGlazing",
+  ] as const;
 
-type ComplianceKey = (typeof COMPLIANCE_KEYS)[number];
+  type ComplianceKey = (typeof COMPLIANCE_KEYS)[number];
 
-// which compliance items support MiniCapture
-const complianceMiniEnabled: ComplianceKey[] = [
-  "intumescentStrips",
-  "coldSmokeSeals",
-  "fireLockedSign",
-  "fireShutSign",
-  "pyroGlazing",
-];
+  // which compliance items support MiniCapture
+  const complianceMiniEnabled: ComplianceKey[] = [
+    "intumescentStrips",
+    "coldSmokeSeals",
+    "fireLockedSign",
+    "fireShutSign",
+    "pyroGlazing",
+  ];
 
-// merge persisted + session images for compliance in BOTH view & edit
-const getComplianceImagesFor = (key: ComplianceKey) =>
-  mergeImages(
-    (complianceCheck as any)?.[`${key}Images`] as string[] | undefined,
-    actionImages?.[key] as string[] | undefined
-  );
+  // merge persisted + session images for compliance in BOTH view & edit
+  const getComplianceImagesFor = (key: ComplianceKey) =>
+    mergeImages(
+      (complianceCheck as any)?.[`${key}Images`] as string[] | undefined,
+      actionImages?.[key] as string[] | undefined
+    );
 
-// whether this compliance key already has saved action data
-const hasComplianceActionData = (key: ComplianceKey) => {
-  const cc = complianceCheck as any;
-  const imgs = getComplianceImagesFor(key) || [];
-  return Boolean(
-    cc?.[`${key}Timeline`] ||
-      cc?.[`${key}Severity`] ||
-      cc?.[`${key}Category`] ||
-      cc?.[`${key}Remediation`] ||
-      cc?.[`${key}Comments`] ||
-      cc?.[`${key}DueDate`] ||
-      imgs.length > 0
-  );
-};
+  // whether this compliance key already has saved action data
+  const hasComplianceActionData = (key: ComplianceKey) => {
+    const cc = complianceCheck as any;
+    const imgs = getComplianceImagesFor(key) || [];
+    return Boolean(
+      cc?.[`${key}Timeline`] ||
+        cc?.[`${key}Severity`] ||
+        cc?.[`${key}Category`] ||
+        cc?.[`${key}Remediation`] ||
+        cc?.[`${key}Comments`] ||
+        cc?.[`${key}DueDate`] ||
+        imgs.length > 0
+    );
+  };
 
-// show MiniCapture when false (non-compliant) OR when saved data exists
-const showComplianceMini = (key: ComplianceKey, allowed: boolean) =>
-  allowed &&
-  complianceMiniEnabled.includes(key) &&
-  (complianceCheck[key] === false || hasComplianceActionData(key));
+  // show MiniCapture when false (non-compliant) OR when saved data exists
+  const showComplianceMini = (key: ComplianceKey, allowed: boolean) =>
+    allowed &&
+    complianceMiniEnabled.includes(key) &&
+    (complianceCheck[key] === false || hasComplianceActionData(key));
 
-// Does this compliance field already have action data saved?
-// const hasComplianceActionData = (key: ComplianceKey) => {
-//   const cc = complianceCheck as any;
-//   const imgs = getComplianceImagesFor(key);
-//   return Boolean(
-//     cc?.[`${key}Timeline`] ||
-//       cc?.[`${key}Severity`] ||
-//       cc?.[`${key}Category`] ||
-//       cc?.[`${key}Remediation`] ||
-//       cc?.[`${key}Comments`] ||
-//       cc?.[`${key}DueDate`] ||
-//       (imgs && imgs.length > 0)
-//   );
-// };
-
-// Should we show the MiniCapture panel for compliance?
-// Show when value is FALSE (non-compliant) OR there is saved action data.
-const shouldShowComplianceMini = (key: ComplianceKey, allowedByShow: boolean) => {
-  if (!allowedByShow) return false;
-  if (!complianceMiniEnabled.includes(key)) return false;
-  return complianceCheck[key] === false || hasComplianceActionData(key);
-};
-
-  // put this helper near the top of FormComponent
-  // const savedFor = (field: string) =>
-  //   mergeImages(
-  //     (formData as any)?.[`${field}Images`] as string[] | undefined,
-  //     actionImages?.[field] as string[] | undefined
+  // Does this compliance field already have action data saved?
+  // const hasComplianceActionData = (key: ComplianceKey) => {
+  //   const cc = complianceCheck as any;
+  //   const imgs = getComplianceImagesFor(key);
+  //   return Boolean(
+  //     cc?.[`${key}Timeline`] ||
+  //       cc?.[`${key}Severity`] ||
+  //       cc?.[`${key}Category`] ||
+  //       cc?.[`${key}Remediation`] ||
+  //       cc?.[`${key}Comments`] ||
+  //       cc?.[`${key}DueDate`] ||
+  //       (imgs && imgs.length > 0)
   //   );
+  // };
+
+  // Should we show the MiniCapture panel for compliance?
+  // Show when value is FALSE (non-compliant) OR there is saved action data.
+  const shouldShowComplianceMini = (
+    key: ComplianceKey,
+    allowedByShow: boolean
+  ) => {
+    if (!allowedByShow) return false;
+    if (!complianceMiniEnabled.includes(key)) return false;
+    return complianceCheck[key] === false || hasComplianceActionData(key);
+  };
 
   const getImagesForField = (field: string) => {
     // In view mode we can merge; in edit mode, actionImages is the single source of truth
@@ -453,7 +447,7 @@ const shouldShowComplianceMini = (key: ComplianceKey, allowedByShow: boolean) =>
               onImagesChange={(images) =>
                 handleImagesChangeMini(images, "head")
               }
-              onResetChange={() => handleResetAction("head", "PHYSICAL")}
+              onResetChange={() => handleResetAction("head")}
               onHandleActionFieldsChange={(val, type) =>
                 handleActionFieldsChange("head", type, val)
               }
@@ -539,7 +533,7 @@ const shouldShowComplianceMini = (key: ComplianceKey, allowedByShow: boolean) =>
                   onImagesChange={(images) =>
                     handleImagesChangeMini(images, field)
                   }
-                  onResetChange={() => handleResetAction(field, "PHYSICAL")}
+                  onResetChange={() => handleResetAction(field)}
                   onHandleActionFieldsChange={(val, type) =>
                     handleActionFieldsChange(field, type, val)
                   }
@@ -551,366 +545,292 @@ const shouldShowComplianceMini = (key: ComplianceKey, allowedByShow: boolean) =>
             </View>
           ))}
 
-          {/* === Compliance Check (with MiniCapture + dependencies + saved data) === */}
+          {/* === Compliance Check (editable + MiniCapture rules) === */}
           <Text style={styles.sectionTitle}>Compliance Check</Text>
 
-{/* Intumescent Strips */}
-<View style={styles.complianceItem}>
-  <Text style={styles.label}>Intumescent Strips</Text>
-  <View style={styles.switchContainer}>
-    <Text style={styles.toggleText}>N</Text>
-    <Switch
-      value={!!complianceCheck.intumescentStrips}
-      onValueChange={() => handleComplianceToggle("intumescentStrips")}
-      disabled={isView}
-    />
-    <Text style={styles.toggleText}>Y</Text>
-  </View>
-</View>
-{showComplianceMini("intumescentStrips", true) && (
-  <MiniCapture
-    key={`cc-mc-${isView ? "view" : "edit"}-intumescentStrips`}
-    isView={isView}
-    fieldValue="intumescentStrips"
-    formData={complianceCheck}
-    savedImages={getComplianceImagesFor("intumescentStrips")}
-    onImagesChange={(images) => handleImagesChangeMini(images, "intumescentStrips")}
-    onImageDelete={(index) => handleDeleteImages(index, "intumescentStrips")}
-    onResetChange={() => handleResetAction("intumescentStrips", "COMPLIANCE")}
-    onHandleActionFieldsChange={(val, type) =>
-      handleActionFieldsChange("intumescentStrips", type, val)
-    }
-    reset={resetCaptureFlag}
-    mandatoryFieldRef={mandatoryFieldRef}
-  />
-)}
-
-{/* Cold Smoke Seals (only when FD30S/60S/90S) */}
-{isColdSeals && (
-  <>
-    <View style={styles.complianceItem}>
-      <Text style={styles.label}>Cold Smoke Seals</Text>
-      <View style={styles.switchContainer}>
-        <Text style={styles.toggleText}>N</Text>
-        <Switch
-          value={!!complianceCheck.coldSmokeSeals}
-          onValueChange={() => handleComplianceToggle("coldSmokeSeals")}
-          disabled={isView}
-        />
-        <Text style={styles.toggleText}>Y</Text>
-      </View>
-    </View>
-    {showComplianceMini("coldSmokeSeals", true) && (
-      <MiniCapture
-        key={`cc-mc-${isView ? "view" : "edit"}-coldSmokeSeals`}
-        isView={isView}
-        fieldValue="coldSmokeSeals"
-        formData={complianceCheck}
-        savedImages={getComplianceImagesFor("coldSmokeSeals")}
-        onImagesChange={(images) => handleImagesChangeMini(images, "coldSmokeSeals")}
-        onImageDelete={(index) => handleDeleteImages(index, "coldSmokeSeals")}
-        onResetChange={() => handleResetAction("coldSmokeSeals", "COMPLIANCE")}
-        onHandleActionFieldsChange={(val, type) =>
-          handleActionFieldsChange("coldSmokeSeals", type, val)
-        }
-        reset={resetCaptureFlag}
-        mandatoryFieldRef={mandatoryFieldRef}
-      />
-    )}
-  </>
-)}
-
-{/* Self Closing Device (if turned OFF -> force Keep Locked = ON) */}
-<View style={styles.complianceItem}>
-  <Text style={styles.label}>Self Closing Device</Text>
-  <View style={styles.switchContainer}>
-    <Text style={styles.toggleText}>N</Text>
-    <Switch
-      value={!!complianceCheck.selfClosingDevice}
-      onValueChange={(val) => {
-        // when turning OFF, ensure Keep Locked is ON
-        if (val === false && !complianceCheck.fireLockedSign) {
-          handleComplianceToggle("fireLockedSign"); // toggles to true if currently false
-        }
-        handleComplianceToggle("selfClosingDevice");
-      }}
-      disabled={isView}
-    />
-    <Text style={styles.toggleText}>Y</Text>
-  </View>
-</View>
-
-{/* Fire Door Keep Locked Sign (visible if SCD is off OR your external flag says so) */}
-{(complianceCheck.selfClosingDevice === false || isFireKeepLocked) && (
-  <>
-    <View style={styles.complianceItem}>
-      <Text style={styles.label}>Fire Door Keep Locked Sign</Text>
-      <View style={styles.switchContainer}>
-        <Text style={styles.toggleText}>N</Text>
-        <Switch
-          value={!!complianceCheck.fireLockedSign}
-          onValueChange={() => handleComplianceToggle("fireLockedSign")}
-          disabled={isView}
-        />
-        <Text style={styles.toggleText}>Y</Text>
-      </View>
-    </View>
-    {showComplianceMini("fireLockedSign", true) && (
-      <MiniCapture
-        key={`cc-mc-${isView ? "view" : "edit"}-fireLockedSign`}
-        isView={isView}
-        fieldValue="fireLockedSign"
-        formData={complianceCheck}
-        savedImages={getComplianceImagesFor("fireLockedSign")}
-        onImagesChange={(images) => handleImagesChangeMini(images, "fireLockedSign")}
-        onImageDelete={(index) => handleDeleteImages(index, "fireLockedSign")}
-        onResetChange={() => handleResetAction("fireLockedSign", "COMPLIANCE")}
-        onHandleActionFieldsChange={(val, type) =>
-          handleActionFieldsChange("fireLockedSign", type, val)
-        }
-        reset={resetCaptureFlag}
-        mandatoryFieldRef={mandatoryFieldRef}
-      />
-    )}
-  </>
-)}
-
-{/* Fire Door Keep Shut Sign */}
-<View style={styles.complianceItem}>
-  <Text style={styles.label}>Fire Door Keep Shut Sign</Text>
-  <View style={styles.switchContainer}>
-    <Text style={styles.toggleText}>N</Text>
-    <Switch
-      value={!!complianceCheck.fireShutSign}
-      onValueChange={() => handleComplianceToggle("fireShutSign")}
-      disabled={isView}
-    />
-    <Text style={styles.toggleText}>Y</Text>
-  </View>
-</View>
-{showComplianceMini("fireShutSign", true) && (
-  <MiniCapture
-    key={`cc-mc-${isView ? "view" : "edit"}-fireShutSign`}
-    isView={isView}
-    fieldValue="fireShutSign"
-    formData={complianceCheck}
-    savedImages={getComplianceImagesFor("fireShutSign")}
-    onImagesChange={(images) => handleImagesChangeMini(images, "fireShutSign")}
-    onImageDelete={(index) => handleDeleteImages(index, "fireShutSign")}
-    onResetChange={() => handleResetAction("fireShutSign", "COMPLIANCE")}
-    onHandleActionFieldsChange={(val, type) =>
-      handleActionFieldsChange("fireShutSign", type, val)
-    }
-    reset={resetCaptureFlag}
-    mandatoryFieldRef={mandatoryFieldRef}
-  />
-)}
-
-{/* Hold Open Device */}
-<View style={styles.complianceItem}>
-  <Text style={styles.label}>Hold Open Device</Text>
-  <View style={styles.switchContainer}>
-    <Text style={styles.toggleText}>N</Text>
-    <Switch
-      value={!!complianceCheck.holdOpenDevice}
-      onValueChange={() => handleComplianceToggle("holdOpenDevice")}
-      disabled={isView}
-    />
-    <Text style={styles.toggleText}>Y</Text>
-  </View>
-</View>
-
-{/* Visible Certification */}
-<View style={styles.complianceItem}>
-  <Text style={styles.label}>Visible Certification on Fire Door</Text>
-  <View style={styles.switchContainer}>
-    <Text style={styles.toggleText}>N</Text>
-    <Switch
-      value={!!complianceCheck.visibleCertification}
-      onValueChange={() => handleComplianceToggle("visibleCertification")}
-      disabled={isView}
-    />
-    <Text style={styles.toggleText}>Y</Text>
-  </View>
-</View>
-
-{/* Door Glazing (if turned OFF -> hide Pyro Glazing, optionally reset) */}
-<View style={styles.complianceItem}>
-  <Text style={styles.label}>Door Contains Glazing</Text>
-  <View style={styles.switchContainer}>
-    <Text style={styles.toggleText}>N</Text>
-    <Switch
-      value={!!complianceCheck.doorGlazing}
-      onValueChange={(val) => {
-        if (val === false) {
-          // optional: clear pyro action data when hiding
-          handleResetAction("pyroGlazing", "COMPLIANCE");
-        }
-        handleComplianceToggle("doorGlazing");
-      }}
-      disabled={isView}
-    />
-    <Text style={styles.toggleText}>Y</Text>
-  </View>
-</View>
-
-{/* Pyro Glazing (only when glazing is present) */}
-{complianceCheck.doorGlazing === true && (
-  <>
-    <View style={styles.complianceItem}>
-      <Text style={styles.label}>Pyro Glazing</Text>
-      <View style={styles.switchContainer}>
-        <Text style={styles.toggleText}>N</Text>
-        <Switch
-          value={!!complianceCheck.pyroGlazing}
-          onValueChange={() => handleComplianceToggle("pyroGlazing")}
-          disabled={isView}
-        />
-        <Text style={styles.toggleText}>Y</Text>
-      </View>
-    </View>
-    {showComplianceMini("pyroGlazing", true) && (
-      <MiniCapture
-        key={`cc-mc-${isView ? "view" : "edit"}-pyroGlazing`}
-        isView={isView}
-        fieldValue="pyroGlazing"
-        formData={complianceCheck}
-        savedImages={getComplianceImagesFor("pyroGlazing")}
-        onImagesChange={(images) => handleImagesChangeMini(images, "pyroGlazing")}
-        onImageDelete={(index) => handleDeleteImages(index, "pyroGlazing")}
-        onResetChange={() => handleResetAction("pyroGlazing", "COMPLIANCE")}
-        onHandleActionFieldsChange={(val, type) =>
-          handleActionFieldsChange("pyroGlazing", type, val)
-        }
-        reset={resetCaptureFlag}
-        mandatoryFieldRef={mandatoryFieldRef}
-      />
-    )}
-  </>
-)}
-
-
-          {/* Cold Smoke Seals (optional section toggle by isColdSeals) */}
-          {/* {isColdSeals && (
-            <View style={styles.complianceItem}>
-              <Text style={styles.label}>Cold Smoke Seals</Text>
-              <View style={styles.switchContainer}>
-                <Text style={styles.toggleText}>N</Text>
-                <Switch
-                  value={complianceCheck.coldSmokeSeals || false}
-                  onValueChange={() => handleComplianceToggle("coldSmokeSeals")}
-                  disabled={isView}
-                />
-                <Text style={styles.toggleText}>Y</Text>
-              </View>
+          {/* Intumescent Strips */}
+          <View style={styles.complianceItem}>
+            <Text style={styles.label}>Intumescent Strips</Text>
+            <View style={styles.switchContainer}>
+              <Text style={styles.toggleText}>N</Text>
+              <Switch
+                value={!!complianceCheck.intumescentStrips}
+                onValueChange={(val) =>
+                  handleComplianceToggle("intumescentStrips", val)
+                }
+                disabled={isView}
+              />
+              <Text style={styles.toggleText}>Y</Text>
             </View>
-          )} */}
+          </View>
+          {showComplianceMini("intumescentStrips", true) && (
+            <MiniCapture
+              key={`cc-mc-${isView ? "view" : "edit"}-intumescentStrips`}
+              isView={isView}
+              fieldValue="intumescentStrips"
+              formData={complianceCheck}
+              savedImages={getComplianceImagesFor("intumescentStrips")}
+              onImagesChange={(images) =>
+                handleImagesChangeMini(images, "intumescentStrips")
+              }
+              onImageDelete={(index) =>
+                handleDeleteImages(index, "intumescentStrips")
+              }
+              // onResetChange={() =>
+              //   handleResetAction("intumescentStrips", "COMPLIANCE")
+              // }
+              onResetChange={() => handleResetAction("intumescentStrips")}
+              onHandleActionFieldsChange={(val, type) =>
+                handleComplianceActionFieldsChange(
+                  "intumescentStrips",
+                  type,
+                  val
+                )
+              }
+              reset={resetCaptureFlag}
+              mandatoryFieldRef={mandatoryFieldRef}
+            />
+          )}
 
-          {/* Self Closing Device */}
-          {/* <View style={styles.complianceItem}>
+          {/* Cold Smoke Seals (only for FDxS) */}
+          {isColdSeals && (
+            <>
+              <View style={styles.complianceItem}>
+                <Text style={styles.label}>Cold Smoke Seals</Text>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.toggleText}>N</Text>
+                  <Switch
+                    value={!!complianceCheck.coldSmokeSeals}
+                    onValueChange={(val) =>
+                      handleComplianceToggle("coldSmokeSeals", val)
+                    }
+                    disabled={isView}
+                  />
+                  <Text style={styles.toggleText}>Y</Text>
+                </View>
+              </View>
+              {showComplianceMini("coldSmokeSeals", true) && (
+                <MiniCapture
+                  key={`cc-mc-${isView ? "view" : "edit"}-coldSmokeSeals`}
+                  isView={isView}
+                  fieldValue="coldSmokeSeals"
+                  formData={complianceCheck}
+                  savedImages={getComplianceImagesFor("coldSmokeSeals")}
+                  onImagesChange={(images) =>
+                    handleImagesChangeMini(images, "coldSmokeSeals")
+                  }
+                  onImageDelete={(index) =>
+                    handleDeleteImages(index, "coldSmokeSeals")
+                  }
+                  onResetChange={() => handleResetAction("coldSmokeSeals")}
+                  onHandleActionFieldsChange={(val, type) =>
+                    handleComplianceActionFieldsChange(
+                      "coldSmokeSeals",
+                      type,
+                      val
+                    )
+                  }
+                  reset={resetCaptureFlag}
+                  mandatoryFieldRef={mandatoryFieldRef}
+                />
+              )}
+            </>
+          )}
+
+          {/* Self Closing Device (OFF -> force Keep Locked = ON) */}
+          <View style={styles.complianceItem}>
             <Text style={styles.label}>Self Closing Device</Text>
             <View style={styles.switchContainer}>
               <Text style={styles.toggleText}>N</Text>
               <Switch
-                value={complianceCheck.selfClosingDevice || false}
-                onValueChange={() =>
-                  handleComplianceToggle("selfClosingDevice")
+                value={!!complianceCheck.selfClosingDevice}
+                onValueChange={(val) => {
+                  if (val === false && !complianceCheck.fireLockedSign) {
+                    handleComplianceToggle("fireLockedSign", true);
+                  }
+                  handleComplianceToggle("selfClosingDevice", val);
+                }}
+                disabled={isView}
+              />
+              <Text style={styles.toggleText}>Y</Text>
+            </View>
+          </View>
+
+          {/* Fire door Keep Locked sign (visible if SCD is OFF or external flag) */}
+          {(complianceCheck.selfClosingDevice === false ||
+            isFireKeepLocked) && (
+            <>
+              <View style={styles.complianceItem}>
+                <Text style={styles.label}>Fire door Keep Locked sign</Text>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.toggleText}>N</Text>
+                  <Switch
+                    value={!!complianceCheck.fireLockedSign}
+                    onValueChange={(val) =>
+                      handleComplianceToggle("fireLockedSign", val)
+                    }
+                    disabled={isView}
+                  />
+                  <Text style={styles.toggleText}>Y</Text>
+                </View>
+              </View>
+              {showComplianceMini("fireLockedSign", true) && (
+                <MiniCapture
+                  key={`cc-mc-${isView ? "view" : "edit"}-fireLockedSign`}
+                  isView={isView}
+                  fieldValue="fireLockedSign"
+                  formData={complianceCheck}
+                  savedImages={getComplianceImagesFor("fireLockedSign")}
+                  onImagesChange={(images) =>
+                    handleImagesChangeMini(images, "fireLockedSign")
+                  }
+                  onImageDelete={(index) =>
+                    handleDeleteImages(index, "fireLockedSign")
+                  }
+                  onResetChange={() => handleResetAction("fireLockedSign")}
+                  onHandleActionFieldsChange={(val, type) =>
+                    handleComplianceActionFieldsChange(
+                      "fireLockedSign",
+                      type,
+                      val
+                    )
+                  }
+                  reset={resetCaptureFlag}
+                  mandatoryFieldRef={mandatoryFieldRef}
+                />
+              )}
+            </>
+          )}
+
+          {/* Fire door Keep Shut sign */}
+          <View style={styles.complianceItem}>
+            <Text style={styles.label}>Fire door Keep Shut sign</Text>
+            <View style={styles.switchContainer}>
+              <Text style={styles.toggleText}>N</Text>
+              <Switch
+                value={!!complianceCheck.fireShutSign}
+                onValueChange={(val) =>
+                  handleComplianceToggle("fireShutSign", val)
                 }
                 disabled={isView}
               />
               <Text style={styles.toggleText}>Y</Text>
             </View>
-          </View> */}
-
-          {/* Fire Door Keep Locked Sign */}
-          {/* {isFireKeepLocked && (
-            <View style={styles.complianceItem}>
-              <Text style={styles.label}>Fire Door Keep Locked Sign</Text>
-              <View style={styles.switchContainer}>
-                <Text style={styles.toggleText}>N</Text>
-                <Switch
-                  value={complianceCheck.fireLockedSign || false}
-                  onValueChange={() => handleComplianceToggle("fireLockedSign")}
-                  disabled={isView}
-                />
-                <Text style={styles.toggleText}>Y</Text>
-              </View>
-            </View>
-          )} */}
-
-          {/* Fire Door Keep Shut Sign */}
-          {/* <View style={styles.complianceItem}>
-            <Text style={styles.label}>Fire Door Keep Shut Sign</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={complianceCheck.fireShutSign || false}
-                onValueChange={() => handleComplianceToggle("fireShutSign")}
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View> */}
+          </View>
+          {showComplianceMini("fireShutSign", true) && (
+            <MiniCapture
+              key={`cc-mc-${isView ? "view" : "edit"}-fireShutSign`}
+              isView={isView}
+              fieldValue="fireShutSign"
+              formData={complianceCheck}
+              savedImages={getComplianceImagesFor("fireShutSign")}
+              onImagesChange={(images) =>
+                handleImagesChangeMini(images, "fireShutSign")
+              }
+              onImageDelete={(index) =>
+                handleDeleteImages(index, "fireShutSign")
+              }
+              onResetChange={() => handleResetAction("fireShutSign")}
+              onHandleActionFieldsChange={(val, type) =>
+                handleComplianceActionFieldsChange("fireShutSign", type, val)
+              }
+              reset={resetCaptureFlag}
+              mandatoryFieldRef={mandatoryFieldRef}
+            />
+          )}
 
           {/* Hold Open Device */}
-          {/* <View style={styles.complianceItem}>
-            <Text style={styles.label}>Hold Open Device</Text>
+          <View style={styles.complianceItem}>
+            <Text style={styles.label}>Hold open device</Text>
             <View style={styles.switchContainer}>
               <Text style={styles.toggleText}>N</Text>
               <Switch
-                value={complianceCheck.holdOpenDevice || false}
-                onValueChange={() => handleComplianceToggle("holdOpenDevice")}
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View> */}
-
-          {/* Visible Certification */}
-          {/* <View style={styles.complianceItem}>
-            <Text style={styles.label}>Visible Certification on Fire Door</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={complianceCheck.visibleCertification || false}
-                onValueChange={() =>
-                  handleComplianceToggle("visibleCertification")
+                value={!!complianceCheck.holdOpenDevice}
+                onValueChange={(val) =>
+                  handleComplianceToggle("holdOpenDevice", val)
                 }
                 disabled={isView}
               />
               <Text style={styles.toggleText}>Y</Text>
             </View>
-          </View> */}
+          </View>
 
-          {/* Door Glazing */}
-          {/* <View style={styles.complianceItem}>
-            <Text style={styles.label}>Door Contains Glazing</Text>
+          {/* Visible Certification */}
+          <View style={styles.complianceItem}>
+            <Text style={styles.label}>Visible certification on fire door</Text>
             <View style={styles.switchContainer}>
               <Text style={styles.toggleText}>N</Text>
               <Switch
-                value={complianceCheck.doorGlazing || false}
-                onValueChange={() => handleComplianceToggle("doorGlazing")}
+                value={!!complianceCheck.visibleCertification}
+                onValueChange={(val) =>
+                  handleComplianceToggle("visibleCertification", val)
+                }
                 disabled={isView}
               />
               <Text style={styles.toggleText}>Y</Text>
             </View>
-          </View> */}
+          </View>
 
-          {/* Pyro Glazing (only if glazing is present) */}
-          {/* {isGlazing && (
-            <View style={styles.complianceItem}>
-              <Text style={styles.label}>Pyro Glazing</Text>
-              <View style={styles.switchContainer}>
-                <Text style={styles.toggleText}>N</Text>
-                <Switch
-                  value={complianceCheck.pyroGlazing || false}
-                  onValueChange={() => handleComplianceToggle("pyroGlazing")}
-                  disabled={isView}
-                />
-                <Text style={styles.toggleText}>Y</Text>
-              </View>
+          {/* Door Glazing (OFF -> hide Pyro Glazing & clear its action data) */}
+          <View style={styles.complianceItem}>
+            <Text style={styles.label}>Door contains glazing</Text>
+            <View style={styles.switchContainer}>
+              <Text style={styles.toggleText}>N</Text>
+              <Switch
+                value={!!complianceCheck.doorGlazing}
+                onValueChange={(val) => {
+                  if (val === false) {
+                    handleComplianceToggle("pyroGlazing", false);
+                    handleResetAction("pyroGlazing");
+                  }
+                  handleComplianceToggle("doorGlazing", val);
+                }}
+                disabled={isView}
+              />
+              <Text style={styles.toggleText}>Y</Text>
             </View>
-          )} */}
+          </View>
+
+          {/* Pyro Glazing (only when glazing is present) */}
+          {complianceCheck.doorGlazing === true && (
+            <>
+              <View style={styles.complianceItem}>
+                <Text style={styles.label}>Pyro glazing</Text>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.toggleText}>N</Text>
+                  <Switch
+                    value={!!complianceCheck.pyroGlazing}
+                    onValueChange={(val) =>
+                      handleComplianceToggle("pyroGlazing", val)
+                    }
+                    disabled={isView}
+                  />
+                  <Text style={styles.toggleText}>Y</Text>
+                </View>
+              </View>
+              {showComplianceMini("pyroGlazing", true) && (
+                <MiniCapture
+                  key={`cc-mc-${isView ? "view" : "edit"}-pyroGlazing`}
+                  isView={isView}
+                  fieldValue="pyroGlazing"
+                  formData={complianceCheck}
+                  savedImages={getComplianceImagesFor("pyroGlazing")}
+                  onImagesChange={(images) =>
+                    handleImagesChangeMini(images, "pyroGlazing")
+                  }
+                  onImageDelete={(index) =>
+                    handleDeleteImages(index, "pyroGlazing")
+                  }
+                  onResetChange={() => handleResetAction("pyroGlazing")}
+                  onHandleActionFieldsChange={(val, type) =>
+                    handleComplianceActionFieldsChange("pyroGlazing", type, val)
+                  }
+                  reset={resetCaptureFlag}
+                  mandatoryFieldRef={mandatoryFieldRef}
+                />
+              )}
+            </>
+          )}
 
           <View className="d-flex gap-3 flex-wrap" style={styles.imageSection}>
             <Text style={styles.label}>Additional Photos</Text>
@@ -967,12 +887,12 @@ const shouldShowComplianceMini = (key: ComplianceKey, allowedByShow: boolean) =>
             <View
               style={{
                 flexDirection: "row",
-                justifyContent: "space-between",
+                justifyContent: "center",
                 padding: 20,
-                marginTop: 20,
+                marginTop: 5,
               }}
             >
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={{
                   backgroundColor: "#ccc",
                   paddingVertical: 12,
@@ -982,7 +902,7 @@ const shouldShowComplianceMini = (key: ComplianceKey, allowedByShow: boolean) =>
                 onPress={() => navigation.goBack()}
               >
                 <Text style={{ color: "#000", fontWeight: "bold" }}>Back</Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
 
               <TouchableOpacity
                 style={{

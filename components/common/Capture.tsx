@@ -39,35 +39,47 @@ const Capture: React.FC<CaptureProps> = ({
 }) => {
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        const newImages = singleImageCapture
-          ? [base64]
-          : [...capturedImages, base64];
-        updateImages(newImages);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string; // data:image/...
+      const next = singleImageCapture ? [base64] : [...capturedImages, base64];
+      updateImages(next);
+    };
+    reader.readAsDataURL(file);
   };
 
   useEffect(() => {
     if (reset) {
       setCapturedImages([]);
       onImagesChange([]);
+      // optionally clear any input refs the parent keeps
       mandatoryFieldRef?.current?.[fieldValue]?.clear?.();
-    } else if (savedImages?.length > 0) {
+    } else if (Array.isArray(savedImages) && savedImages.length > 0) {
       setCapturedImages(savedImages);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reset, savedImages]);
 
+   // ----- helpers -----
+ const toDisplayUri = (u?: string) => {
+  if (!u) return "";
+  if (/^https?:\/\//i.test(u)) return `${ImageProxyBaseUrl}${encodeURIComponent(u)}`;
+  // data:, file://, content://, blob: should be used directly
+  return u;
+};
+
   const updateImages = (images: string[]) => {
-    setCapturedImages(images);
-    onImagesChange(images);
+    const clean = (images ?? []).filter(
+      (s): s is string => typeof s === "string" && s.length > 0
+    );
+    setCapturedImages(clean);
+    onImagesChange(clean);
   };
+
+  
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -183,20 +195,15 @@ const Capture: React.FC<CaptureProps> = ({
         {capturedImages.length > 0 && (
           <ScrollView contentContainerStyle={styles.imageList}>
             {capturedImages.map((img, index) => {
-              const uri =
-                typeof img === "string" && img.startsWith("data:image")
-                  ? img
-                  : `${ImageProxyBaseUrl}${encodeURIComponent(img || "")}`;
-
+              const uri = toDisplayUri(img);
               return (
-                <View key={index} style={styles.imageWrapper}>
+                <View key={`${index}-${uri}`} style={styles.imageWrapper}>
                   <Image
                     source={{ uri }}
                     style={styles.image}
                     resizeMode="cover"
                     onError={() => console.log("❌ image failed:", uri)}
                   />
-
                   {!isView && (
                     <TouchableOpacity
                       style={styles.removeButton}
