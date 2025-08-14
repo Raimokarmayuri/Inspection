@@ -45,9 +45,11 @@ const guessMimeFromName = (name: string) => {
 };
 
 /** Convert base64 Data URL to a temp file URI for RN */
+/** Convert base64 Data URL to a temp file URI for RN */
 async function base64DataUrlToFileUri(
   dataUrl: string
 ): Promise<{ uri: string; name: string; type: string }> {
+  if (!dataUrl) throw new Error("Empty dataUrl");
   const match = dataUrl.match(/^data:(.+?);base64,(.*)$/);
   const type = match?.[1] || "image/jpeg";
   const base64 = match?.[2] || dataUrl.replace(/^data:.+;base64,/, "");
@@ -64,12 +66,16 @@ async function normaliseForUpload(
   src: string,
   field: string
 ): Promise<{ uri: string; name: string; type: string }> {
+  if (!src) throw new Error("Invalid image source");
   if (src.startsWith("data:image/")) {
     return base64DataUrlToFileUri(src);
   }
   const name = `${field}_Image_${Date.now()}.jpg`;
   return { uri: src, name, type: guessMimeFromName(name) };
 }
+
+const isHttpUrl = (u?: string) => !!u && /^https?:\/\//i.test(u);
+
 
 const Dashboard = () => {
   const route = useRoute<any>();
@@ -157,7 +163,7 @@ const Dashboard = () => {
     // doorPhoto: "",
     fireResistance: "",
     head: "",
-    hingeLocation: "Select",
+    hingeLocation: "",
     hinge: "",
     closing: "",
     threshold: "",
@@ -458,34 +464,24 @@ const Dashboard = () => {
     setActionMenuFlag((prev) => ({ ...prev, [name]: show }));
   };
 
-  const handleImagesChangeMini = async (
-    newImages: string[],
-    field: string
-  ): Promise<void> => {
-    const prev = actionImages[field] || [];
+const handleImagesChangeMini = async (newImages: string[], field: string) => {
+  const prev = actionImages[field] || [];
+  const clean = (newImages || []).filter(Boolean);
+  // upload only the items that are not URLs
+  const toUpload = clean.filter((u) => !isHttpUrl(u));
+  if (toUpload.length === 0) return;
 
-    // Only upload items that aren't already server URLs
-    const toUpload = newImages.filter(
-      (u) => !(u.startsWith("http://") || u.startsWith("https://"))
-    );
-    if (toUpload.length === 0) return;
+  const uploaded = (
+    await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
+  ).filter((u) => !!u) as string[];
 
-    // Upload each new image using your existing API helper
-    const uploaded = (
-      await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
-    ).filter(Boolean) as string[];
+  if (uploaded.length === 0) return;
 
-    if (uploaded.length === 0) return;
+  const next = Array.from(new Set([...prev, ...uploaded]));
+  setActionImages((p) => ({ ...p, [field]: next }));
+  setFormData((p) => ({ ...p, [`${field}Images`]: next } as any));
+};
 
-    // Merge (and de-dupe just in case)
-    const next = Array.from(new Set([...prev, ...uploaded]));
-    setActionImages((prev) => ({ ...prev, [field]: next }));
-    setFormData((prev) => ({ ...prev, [`${field}Images`]: next }));
-    // setActionImages((prevMap) => ({ ...prevMap, [field]: next }));
-
-    // (Optional) also mirror into formData so MiniCapture re-renders from it too
-    // setFormData((prev: any) => ({ ...prev, [`${field}Images`]: next }));
-  };
 
   const handleResetAction = (
     field: string,
@@ -738,108 +734,105 @@ const Dashboard = () => {
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
   }
 
-  const uploadImageAPI = async (
-    newImages: string[],
-    field: string
-  ): Promise<string> => {
-    try {
-      const rawToken = userObj?.token ?? "";
-      if (!rawToken) {
-        console.warn("No auth token found in userObj");
-        return "";
-      }
+ const uploadImageAPI = async (
+  newImages: string[],
+  field: string
+): Promise<string> => {
+  try {
+    // 💡 Filter out falsy values and keep only the last new local/base64 item
+    const clean = (newImages || []).filter(Boolean);
+    const last = clean.length ? clean[clean.length - 1] : null;
 
-      // ✅ ensure exactly one "Bearer " prefix
-      const authHeader = rawToken.startsWith("Bearer ")
-        ? rawToken
-        : `Bearer ${rawToken}`;
+    if (!last) return "";                         // nothing to upload
+    if (isHttpUrl(last)) return last;             // already uploaded URL
 
-      const latest = newImages[newImages.length - 1];
-      let filePart: { uri?: string; name: string; type: string } | File | Blob;
-      let name = `${field}_Image_${Date.now()}.jpg`;
-      let type = "image/jpeg";
-
-      if (Platform.OS === "web") {
-        const res = await fetch(latest);
-        const blob = await res.blob();
-        type = blob.type || type;
-        // Use File on web so the server gets a filename
-        filePart = new File([blob], name, { type });
-      } else {
-        const parts = await normaliseForUpload(latest, field);
-        name = parts.name;
-        type = parts.type;
-        filePart = { uri: parts.uri, name, type } as any;
-      }
-
-      const form = new FormData();
-      form.append("File", filePart as any, name);
-      form.append("Client", "ABC");
-      form.append("Property", "Candor");
-      form.append("InspectionDate", new Date().toISOString());
-
-      const resp = await fetch(`${hostName}api/Inspection/upload`, {
-        method: "POST",
-        headers: {
-          Authorization: authHeader, // ✅
-          // DO NOT set Content-Type manually when sending FormData
-        },
-        body: form,
-        // credentials: 'include', // only if your API uses cookies (likely not)
-      });
-
-      if (!resp.ok) {
-        const www = resp.headers.get("www-authenticate") || "";
-        const text = await resp.text().catch(() => "");
-        console.error("Upload failed", {
-          status: resp.status,
-          wwwAuthenticate: www,
-          body: text?.slice(0, 300),
-        });
-        return "";
-      }
-
-      const data = await resp.json().catch(() => ({} as any));
-      return data?.result?.blobUrl || "";
-    } catch (err) {
-      console.error("uploadImageAPI error:", err);
+    const rawToken = userObj?.token ?? "";
+    if (!rawToken) {
+      console.warn("No auth token found in userObj");
       return "";
     }
-  };
+    const authHeader = rawToken.startsWith("Bearer ")
+      ? rawToken
+      : `Bearer ${rawToken}`;
 
-  const handleImagesChange = async (newImages: string[], field: string) => {
-    const uploadedUrl = await uploadImageAPI(newImages, field);
-    if (!uploadedUrl) return;
+    let filePart: { uri?: string; name: string; type: string } | File | Blob;
+    let name = `${field}_Image_${Date.now()}.jpg`;
+    let type = "image/jpeg";
 
-    switch (field) {
-      case "Additional": {
-        const combined = [...additionalImages, uploadedUrl];
-        setAdditionalImages(combined);
-        break;
-      }
-
-      case "Door": {
-        setFormData((prev) => ({
-          ...prev,
-          // doorPhoto: uploadedUrl,
-          doorPhoto: [...(prev.doorPhoto || []), uploadedUrl],
-        }));
-        break;
-      }
-
-      case "Floor": {
-        setBasicInfo((prev) => ({
-          ...prev,
-          floorPlan: [...(prev.floorPlan || []), uploadedUrl],
-        }));
-        break;
-      }
-
-      default:
-        console.warn(`Unhandled image field: ${field}`);
-        break;
+    if (Platform.OS === "web") {
+      // last could be base64 or blob URL or local path handled by browser
+      const res = await fetch(last);
+      const blob = await res.blob();
+      type = blob.type || type;
+      filePart = new File([blob], name, { type });
+    } else {
+      // RN (Android/iOS)
+      const parts = await normaliseForUpload(last, field);
+      name = parts.name;
+      type = parts.type;
+      filePart = { uri: parts.uri, name, type } as any;
     }
-  };
+
+    const form = new FormData();
+    form.append("File", filePart as any, name);
+    form.append("Client", "ABC");
+    form.append("Property", "Candor");
+    form.append("InspectionDate", new Date().toISOString());
+
+    const resp = await fetch(`${hostName}api/Inspection/upload`, {
+      method: "POST",
+      headers: { Authorization: authHeader }, // don't set Content-Type
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      console.error("Upload failed", { status: resp.status, body: text?.slice(0, 300) });
+      return "";
+    }
+
+    const data = await resp.json().catch(() => ({} as any));
+    return data?.result?.blobUrl || "";
+  } catch (err) {
+    console.error("uploadImageAPI error:", err);
+    return "";
+  }
+};
+
+
+const handleImagesChange = async (newImages: string[], field: string) => {
+  const clean = (newImages || []).filter(Boolean);
+  if (clean.length === 0) return; // nothing to do
+
+  // Find the *last* item and upload only if it's not already a URL
+  const last = clean[clean.length - 1];
+  const uploadedUrl = isHttpUrl(last) ? last : await uploadImageAPI([last], field);
+  if (!uploadedUrl) return;
+
+  switch (field) {
+    case "Additional": {
+      setAdditionalImages((prev) => [...prev, uploadedUrl]);
+      break;
+    }
+    case "Door": {
+      setFormData((prev) => ({
+        ...prev,
+        doorPhoto: [...(prev.doorPhoto || []), uploadedUrl],
+      }));
+      break;
+    }
+    case "Floor": {
+      setBasicInfo((prev) => ({
+        ...prev,
+        floorPlan: [...(prev.floorPlan || []), uploadedUrl],
+      }));
+      break;
+    }
+    default:
+      console.warn(`Unhandled image field: ${field}`);
+  }
+};
+
 
   // nice labels for alert lines
   const LABELS: Record<string, string> = {
@@ -930,7 +923,7 @@ const Dashboard = () => {
     // Basic requireds
     if (isEmpty(basicInfo.floor)) e.floor = "Floor is required";
     if (isEmpty(formData.doorType)) e.doorType = "Door Type is required";
-    if (isEmpty(formData.doorPhoto)) e.doorType = "Door Photo is required";
+    if (isEmpty(formData.doorPhoto)) e.doorPhoto = "Door Photo is required";
     if (isEmpty(formData.doorNumber)) e.doorNumber = "Door Number is required";
     if (isEmpty(formData.hingeLocation))
       e.hingeLocation = "Hinge Location is required";
@@ -1517,7 +1510,7 @@ const Dashboard = () => {
                         justifyContent: "center",
                         marginTop: 8,
                       },
-                      !!errors?.hingeLocation && styles.errorInput,
+                      errors.hingeLocation && styles.errorInput,
                     ]}
                   >
                     <Picker
@@ -1538,7 +1531,7 @@ const Dashboard = () => {
                       <Picker.Item label="Left" value="1" color="#034694" />
                       <Picker.Item label="Right" value="2" color="#034694" />
                     </Picker>
-                    {errors?.hingeLocation && (
+                    {errors.hingeLocation && (
                       <Text style={styles.errorText}>
                         {errors.hingeLocation}
                       </Text>

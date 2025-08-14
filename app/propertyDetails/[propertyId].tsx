@@ -4,14 +4,13 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Button,
   Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -579,7 +578,9 @@ const canDownload = canAdminOrApproverDownload || canInspectorDownload;
             {/* {userRole === UserRoles.INSPECTOR &&
               inspectorInspectionStatus !== Statuses.COMPLETED && ( */}
                {canSubmitForApproval && (
-          <Button title="Submit for Approval" onPress={onSubmitForApproval} />
+<TouchableOpacity style={styles.submitButton} onPress={onSubmitForApproval}>
+  <Text style={styles.submitButtonText}>Submit for Approval</Text>
+</TouchableOpacity>
         )}
 
             <TouchableOpacity
@@ -674,6 +675,26 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  submitButton: {
+  backgroundColor: "#4CAF50", // green
+  paddingVertical: 12,
+  paddingHorizontal: 20,
+  borderRadius: 8,
+  alignItems: "center",
+  justifyContent: "center",
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 3,
+  elevation: 3, // Android shadow
+  marginTop: 10,
+},
+submitButtonText: {
+  color: "#fff",
+  fontSize: 16,
+  fontWeight: "bold",
+},
+
   headerText: {
     fontSize: 18,
     fontWeight: "600",

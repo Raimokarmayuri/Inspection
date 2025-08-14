@@ -217,13 +217,14 @@ const ViewSurvey: React.FC = () => {
   // ViewSurvey.tsx
   const handleFormDataChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    if (!isView && ["head", "hinge", "threshold"].includes(field)) {
-      const n = parseFloat(String(value).replace(",", "."));
-      setActionMenuFlag((prev) => ({
-        ...prev,
-        [field]: Number.isFinite(n) && n > 3,
-      }));
-    }
+   if (!isView && ["head", "hinge", "closing", "threshold"].includes(field)) {
+  const n = parseFloat(String(value).replace(",", "."));
+  setActionMenuFlag((prev) => ({
+    ...prev,
+    [field]: Number.isFinite(n) && n > 3,
+  }));
+}
+
   };
 
 // was: (field: ComplianceKey, val: boolean)
@@ -719,7 +720,7 @@ const handleComplianceActionFieldsChange = (
       const response = await http.post(SAVE_SURVEY_FORM_DATA, payload, {
         headers: { "Content-Type": "application/json" },
       });
-      console.log("✅ API Response:", response.data);
+      // console.log("✅ API Response:", response.data);
       return response;
     } catch (err: any) {
       if (err.response) {
@@ -848,14 +849,14 @@ const handleComplianceActionFieldsChange = (
   useEffect(() => {
     const modeNorm = (mode ?? "").toString().trim().toLowerCase();
     setIsView(modeNorm !== "edit"); // false in edit mode
-    console.log(
-      "mode raw:",
-      mode,
-      "normalized:",
-      modeNorm,
-      "isView:",
-      modeNorm !== "edit"
-    );
+    // console.log(
+    //   "mode raw:",
+    //   mode,
+    //   "normalized:",
+    //   modeNorm,
+    //   "isView:",
+    //   modeNorm !== "edit"
+    // );
   }, [mode]);
 
   // ---- Data load ----
@@ -936,7 +937,7 @@ const handleComplianceActionFieldsChange = (
             ? formatDateString(src.dueDate)
             : "";
           (fd as any)[`${k}photos`] = src.photos ?? "";
-          console.log("photos", src.photos);
+          // console.log("photos", src.photos);
           // saved images for MiniCapture
           physAI[k] = Array.isArray(src.photos) ? src.photos : [];
         });
@@ -961,41 +962,45 @@ const handleComplianceActionFieldsChange = (
         const cc: ComplianceCheck = {} as ComplianceCheck;
         const ai: ActionImages = {} as ActionImages;
 
-        Object.entries(COMPLIANCE_CHECK_MASTER).forEach(([idKey, id]) => {
-          const key = idKey.replace("Id", "") as ComplianceKey;
-          const item = data.complianceChecks.find(
-            (x: any) => x.complianceCheckMasterID === id
-          );
-          if (!item) return;
+       Object.entries(COMPLIANCE_CHECK_MASTER).forEach(([idKey, id]) => {
+  const key = idKey.replace("Id", "") as ComplianceKey;
+  const item = data.complianceChecks.find((x: any) => x.complianceCheckMasterID === id);
+  if (!item) return;
 
-          (cc as any)[key] =
-            key === "fireLockedSign" ? item?.isCompliant : item?.isCompliant;
-          (cc as any)[`${key}Timeline`] = item?.actionItem?.timeline;
-          (cc as any)[`${key}Severity`] = item?.actionItem?.severity;
-          (cc as any)[`${key}Comments`] = item?.actionItem?.comment;
-          (cc as any)[`${key}Remediation`] = item?.actionItem?.remediation;
-          (cc as any)[`${key}Category`] = item?.actionItem?.category;
-          (cc as any)[`${key}DueDate`] = item?.actionItem?.dueDate
-            ? formatDateString(item.actionItem.dueDate)
-            : "";
-          (cc as any)[`${key}Id`] = id;
-          (ai as any)[key] = item?.actionItem?.photos;
+  (cc as any)[key] = item?.isCompliant;
+  (cc as any)[`${key}Timeline`] = item?.actionItem?.timeline ?? "";
+  (cc as any)[`${key}Severity`] = item?.actionItem?.severity ?? "";
+  (cc as any)[`${key}Comments`] = item?.actionItem?.comment ?? "";
+  (cc as any)[`${key}Remediation`] = item?.actionItem?.remediation ?? "";
+  (cc as any)[`${key}Category`] = item?.actionItem?.category ?? "";
+  (cc as any)[`${key}DueDate`] = item?.actionItem?.dueDate ? formatDateString(item.actionItem.dueDate) : "";
+  (cc as any)[`${key}Id`] = id;
 
-          if (key === "selfClosingDevice" && !item?.isCompliant) {
-            setFireKeepLocked(true);
-          }
-          if (key === "doorGlazing") {
-            setIsGlazing(item?.isCompliant);
-          }
-        });
+  const photos = Array.isArray(item?.actionItem?.photos) ? item.actionItem.photos : [];
+  (ai as any)[key] = photos;
+
+  // optional but useful since your FormComponent merges `${key}Images`
+  (cc as any)[`${key}Images`] = photos;
+
+  if (key === "selfClosingDevice" && !item?.isCompliant) setFireKeepLocked(true);
+  if (key === "doorGlazing") setIsGlazing(item?.isCompliant);
+});
+
 
         setComplianceCheck(cc);
+
+        // ✅ one place to set everything used by MiniCapture
+setActionImages(prev => ({
+  ...prev,
+  ...physAI, // head/hinge/closing/threshold
+  ...ai,     // intumescentStrips, coldSmokeSeals, fireLockedSign, etc.
+}));
         // setActionImages(ai);
         setDoorTypesOption(property.doorTypes);
         setFloorPlanImages([data.inspectedPropertyFloorsInfo.floorPlanImage]);
         setIsColdSeals(
-          ["5", "6", "7"].includes(data.physicalMeasurement.fireRatingID)
-        );
+  ["5", "6", "7", "8"].includes(data.physicalMeasurement.fireRatingID)
+);
 
         setIsLoading(false);
       } catch (err: any) {
