@@ -21,6 +21,7 @@ import {
   FormData as InspectionFormData,
 } from "../types";
 import Capture from "./Capture";
+import Loader from "./Loader";
 import MiniCapture from "./MiniCapture";
 
 interface FormProps {
@@ -95,8 +96,6 @@ const fireRatingMap: Record<string, string> = {
   "8": "FD120S",
 };
 
-
-
 const mergeImages = (a?: string[], b?: string[]) =>
   Array.from(new Set([...(a ?? []), ...(b ?? [])]));
 
@@ -146,109 +145,113 @@ const FormComponent: React.FC<FormProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   // put right after: const [submitting, setSubmitting] = useState(false);
-const [errors, setErrors] = useState<Record<string, string>>({});
-const [showMiniErrors, setShowMiniErrors] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showMiniErrors, setShowMiniErrors] = useState(false);
 
-const isEmpty = (v: any) =>
-  v === undefined || v === null ||
-  (typeof v === "string" && v.trim() === "") ||
-  (Array.isArray(v) && v.length === 0);
+  const isEmpty = (v: any) =>
+    v === undefined ||
+    v === null ||
+    (typeof v === "string" && v.trim() === "") ||
+    (Array.isArray(v) && v.length === 0);
 
-const isUnselected = (v: any) => v === "" || v === "Select";
+  const isUnselected = (v: any) => v === "" || v === "Select";
 
-/** Which physical fields can open MiniCapture */
-// const PHYSICAL_KEYS = [
-//   "head",
-//   "hinge",
-//   "closing",
-//   "threshold",
-//   "doorThickness",
-//   "frameDepth",
-//   "doorSize",
-//   "fullDoorsetSize",
-// ] as const;
-// Replace your PHYSICAL_KEYS with:
-const MINI_PHYSICAL_KEYS = ["head","hinge","closing","threshold"] as const;
+  /** Which physical fields can open MiniCapture */
+  // const PHYSICAL_KEYS = [
+  //   "head",
+  //   "hinge",
+  //   "closing",
+  //   "threshold",
+  //   "doorThickness",
+  //   "frameDepth",
+  //   "doorSize",
+  //   "fullDoorsetSize",
+  // ] as const;
+  // Replace your PHYSICAL_KEYS with:
+  const MINI_PHYSICAL_KEYS = ["head", "hinge", "closing", "threshold"] as const;
 
-// (optional) keep a convenience array of all physical inputs (for validation/inputs)
-const ALL_PHYSICAL_INPUTS = [
-  "head","hinge","closing","threshold",
-  "doorThickness","frameDepth","doorSize","fullDoorsetSize",
-] as const;
+  // (optional) keep a convenience array of all physical inputs (for validation/inputs)
+  const ALL_PHYSICAL_INPUTS = [
+    "head",
+    "hinge",
+    "closing",
+    "threshold",
+    "doorThickness",
+    "frameDepth",
+    "doorSize",
+    "fullDoorsetSize",
+  ] as const;
 
+  /** Pretty names for the alert list */
+  const LABELS: Record<string, string> = {
+    head: "Head",
+    hinge: "Hinge",
+    closing: "Closing",
+    threshold: "Threshold",
+    doorThickness: "Door Thickness",
+    frameDepth: "Frame Depth",
+    doorSize: "Door Size",
+    fullDoorsetSize: "Full Doorset Size",
+    intumescentStrips: "Intumescent Strips",
+    coldSmokeSeals: "Cold Smoke Seals",
+    fireLockedSign: "Keep Locked Sign",
+    fireShutSign: "Keep Shut Sign",
+    pyroGlazing: "Pyro Glazing",
+  };
 
+  /** Return missing fields for a MiniCapture block (Severity/Category/DueDate/Remediation) */
+  const requiredMiniErrorsForPrefix = (obj: any, prefix: string): string[] => {
+    const val = (k: string) => String(obj?.[`${prefix}${k}`] ?? "").trim();
+    const sel = (v: string) => v === "" || v === "Select";
 
-/** Pretty names for the alert list */
-const LABELS: Record<string, string> = {
-  head: "Head",
-  hinge: "Hinge",
-  closing: "Closing",
-  threshold: "Threshold",
-  doorThickness: "Door Thickness",
-  frameDepth: "Frame Depth",
-  doorSize: "Door Size",
-  fullDoorsetSize: "Full Doorset Size",
-  intumescentStrips: "Intumescent Strips",
-  coldSmokeSeals: "Cold Smoke Seals",
-  fireLockedSign: "Keep Locked Sign",
-  fireShutSign: "Keep Shut Sign",
-  pyroGlazing: "Pyro Glazing",
-};
+    const severity = val("Severity");
+    const category = val("Category");
+    const dueDate = val("DueDate");
+    const remediation = val("Remediation");
 
-/** Return missing fields for a MiniCapture block (Severity/Category/DueDate/Remediation) */
-const requiredMiniErrorsForPrefix = (obj: any, prefix: string): string[] => {
-  const val = (k: string) => String(obj?.[`${prefix}${k}`] ?? "").trim();
-  const sel = (v: string) => v === "" || v === "Select";
+    const missing: string[] = [];
+    if (sel(severity)) missing.push("Severity");
+    if (sel(category)) missing.push("Category");
+    if (sel(dueDate)) missing.push("Due Date");
+    if (remediation === "") missing.push("Remedial/Action required");
+    return missing;
+  };
 
-  const severity = val("Severity");
-  const category = val("Category");
-  const dueDate = val("DueDate");
-  const remediation = val("Remediation");
+  /** Build a single list of all missing MiniCapture requirements */
+  // const collectMiniCaptureMissing = (): string[] => {
+  //   const lines: string[] = [];
 
-  const missing: string[] = [];
-  if (sel(severity))  missing.push("Severity");
-  if (sel(category))  missing.push("Category");
-  if (sel(dueDate))   missing.push("Due Date");
-  if (remediation === "") missing.push("Remedial/Action required");
-  return missing;
-};
+  //   // PHYSICAL: if MiniCapture is shown for a field, validate it
+  //   PHYSICAL_KEYS.forEach((k) => {
+  //     if (shouldShowMini(k)) {
+  //       const miss = requiredMiniErrorsForPrefix(formData, k);
+  //       if (miss.length) lines.push(`${LABELS[k]}: ${miss.join(", ")}`);
+  //     }
+  //   });
 
-/** Build a single list of all missing MiniCapture requirements */
-// const collectMiniCaptureMissing = (): string[] => {
-//   const lines: string[] = [];
+  //   // COMPLIANCE: only those that can show MiniCapture per your rules
+  //   const COMPLIANCE_KEYS = [
+  //     "intumescentStrips",
+  //     "coldSmokeSeals",
+  //     "fireLockedSign",
+  //     "fireShutSign",
+  //     "pyroGlazing",
+  //   ] as const;
 
-//   // PHYSICAL: if MiniCapture is shown for a field, validate it
-//   PHYSICAL_KEYS.forEach((k) => {
-//     if (shouldShowMini(k)) {
-//       const miss = requiredMiniErrorsForPrefix(formData, k);
-//       if (miss.length) lines.push(`${LABELS[k]}: ${miss.join(", ")}`);
-//     }
-//   });
+  //   COMPLIANCE_KEYS.forEach((k) => {
+  //     // respect your existing visibility rules
+  //     const allowed =
+  //       (k !== "coldSmokeSeals" || isColdSeals) &&
+  //       (k !== "pyroGlazing"     || complianceCheck.doorGlazing === true);
 
-//   // COMPLIANCE: only those that can show MiniCapture per your rules
-//   const COMPLIANCE_KEYS = [
-//     "intumescentStrips",
-//     "coldSmokeSeals",
-//     "fireLockedSign",
-//     "fireShutSign",
-//     "pyroGlazing",
-//   ] as const;
+  //     if (showComplianceMini(k as any, allowed)) {
+  //       const miss = requiredMiniErrorsForPrefix(complianceCheck, k);
+  //       if (miss.length) lines.push(`${LABELS[k]}: ${miss.join(", ")}`);
+  //     }
+  //   });
 
-//   COMPLIANCE_KEYS.forEach((k) => {
-//     // respect your existing visibility rules
-//     const allowed =
-//       (k !== "coldSmokeSeals" || isColdSeals) &&
-//       (k !== "pyroGlazing"     || complianceCheck.doorGlazing === true);
-
-//     if (showComplianceMini(k as any, allowed)) {
-//       const miss = requiredMiniErrorsForPrefix(complianceCheck, k);
-//       if (miss.length) lines.push(`${LABELS[k]}: ${miss.join(", ")}`);
-//     }
-//   });
-
-//   return lines;
-// };
-
+  //   return lines;
+  // };
 
   // const isEmpty = (v: any) =>
   //   v === undefined ||
@@ -297,9 +300,9 @@ const requiredMiniErrorsForPrefix = (obj: any, prefix: string): string[] => {
       if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
     });
 
-    ALL_PHYSICAL_INPUTS.forEach(k => {
-  if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
-});
+    ALL_PHYSICAL_INPUTS.forEach((k) => {
+      if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
+    });
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -319,65 +322,65 @@ const requiredMiniErrorsForPrefix = (obj: any, prefix: string): string[] => {
   //   "pyroGlazing",
   // ] as const;
 
-// --- Compliance helpers (replace your current block) ---
-const COMPLIANCE_KEYS = [
-  "intumescentStrips",
-  "coldSmokeSeals",
-  "selfClosingDevice",
-  "fireLockedSign",
-  "fireShutSign",
-  "holdOpenDevice",
-  "visibleCertification",
-  "doorGlazing",
-  "pyroGlazing",
-] as const;
+  // --- Compliance helpers (replace your current block) ---
+  const COMPLIANCE_KEYS = [
+    "intumescentStrips",
+    "coldSmokeSeals",
+    "selfClosingDevice",
+    "fireLockedSign",
+    "fireShutSign",
+    "holdOpenDevice",
+    "visibleCertification",
+    "doorGlazing",
+    "pyroGlazing",
+  ] as const;
 
-type ComplianceKey =
-  | "intumescentStrips"
-  | "coldSmokeSeals"
-  | "selfClosingDevice"
-  | "fireLockedSign"
-  | "fireShutSign"
-  | "holdOpenDevice"
-  | "visibleCertification"
-  | "doorGlazing"
-  | "pyroGlazing";
+  type ComplianceKey =
+    | "intumescentStrips"
+    | "coldSmokeSeals"
+    | "selfClosingDevice"
+    | "fireLockedSign"
+    | "fireShutSign"
+    | "holdOpenDevice"
+    | "visibleCertification"
+    | "doorGlazing"
+    | "pyroGlazing";
 
-// ✅ Only these 4 show MiniCapture, and only when value === false
-const MINI_CAPTURE_KEYS: ComplianceKey[] = [
-  "intumescentStrips",
-  "fireLockedSign",
-  "fireShutSign",
-  "pyroGlazing",
-];
+  // ✅ Only these 4 show MiniCapture, and only when value === false
+  const MINI_CAPTURE_KEYS: ComplianceKey[] = [
+    "intumescentStrips",
+    "fireLockedSign",
+    "fireShutSign",
+    "pyroGlazing",
+  ];
 
-// Show MiniCapture strictly when the switch is OFF, honoring gates.
-const showComplianceMini = (key: ComplianceKey) => {
-  // Only our 4 keys are eligible
-  if (!MINI_CAPTURE_KEYS.includes(key)) return false;
+  // Show MiniCapture strictly when the switch is OFF, honoring gates.
+  const showComplianceMini = (key: ComplianceKey) => {
+    // Only our 4 keys are eligible
+    if (!MINI_CAPTURE_KEYS.includes(key)) return false;
 
-  // Gating:
-  // - pyroGlazing only if glazing is present
-  if (key === "pyroGlazing" && complianceCheck.doorGlazing !== true) return false;
+    // Gating:
+    // - pyroGlazing only if glazing is present
+    if (key === "pyroGlazing" && complianceCheck.doorGlazing !== true)
+      return false;
 
-  // - fireLockedSign only visible if SCD is OFF or external flag says to show it
-  if (
-    key === "fireLockedSign" &&
-    !(complianceCheck.selfClosingDevice === false || isFireKeepLocked)
-  ) return false;
+    // - fireLockedSign only visible if SCD is OFF or external flag says to show it
+    if (
+      key === "fireLockedSign" &&
+      !(complianceCheck.selfClosingDevice === false || isFireKeepLocked)
+    )
+      return false;
 
-  // Show MiniCapture only when the switch is false
-  return complianceCheck[key] === false;
-};
+    // Show MiniCapture only when the switch is false
+    return complianceCheck[key] === false;
+  };
 
-// Merge persisted + session images for compliance
-const getComplianceImagesFor = (key: ComplianceKey) =>
-  mergeImages(
-    (complianceCheck as any)?.[`${key}Images`] as string[] | undefined,
-    actionImages?.[key] as string[] | undefined
-  );
-
-
+  // Merge persisted + session images for compliance
+  const getComplianceImagesFor = (key: ComplianceKey) =>
+    mergeImages(
+      (complianceCheck as any)?.[`${key}Images`] as string[] | undefined,
+      actionImages?.[key] as string[] | undefined
+    );
 
   // merge persisted + session images for compliance in BOTH view & edit
   // const getComplianceImagesFor = (key: ComplianceKey) =>
@@ -402,19 +405,19 @@ const getComplianceImagesFor = (key: ComplianceKey) =>
     );
   };
 
-//   // show MiniCapture when false (non-compliant) OR when saved data exists
-// const showComplianceMini = (key: ComplianceKey) => {
-//   // applicability gates
-//   if (key === "coldSmokeSeals" && !isColdSeals) return false;
-//   if (key === "pyroGlazing" && complianceCheck.doorGlazing !== true) return false;
-//   if (
-//     key === "fireLockedSign" &&
-//     !(complianceCheck.selfClosingDevice === false || isFireKeepLocked)
-//   ) return false;
+  //   // show MiniCapture when false (non-compliant) OR when saved data exists
+  // const showComplianceMini = (key: ComplianceKey) => {
+  //   // applicability gates
+  //   if (key === "coldSmokeSeals" && !isColdSeals) return false;
+  //   if (key === "pyroGlazing" && complianceCheck.doorGlazing !== true) return false;
+  //   if (
+  //     key === "fireLockedSign" &&
+  //     !(complianceCheck.selfClosingDevice === false || isFireKeepLocked)
+  //   ) return false;
 
-//   // treat undefined as off
-//   return complianceCheck[key] !== true;
-// };
+  //   // treat undefined as off
+  //   return complianceCheck[key] !== true;
+  // };
   // Should we show the MiniCapture panel for compliance?
   // Show when value is FALSE (non-compliant) OR there is saved action data.
   // const shouldShowComplianceMini = (
@@ -460,22 +463,24 @@ const getComplianceImagesFor = (key: ComplianceKey) =>
     return Number.isFinite(n) ? n : NaN;
   };
 
-const ACTION_THRESHOLD = 3;
+  const ACTION_THRESHOLD = 3;
 
-const shouldShowMini = (field: string) => {
-  // View mode: show if any action data exists
-  if (isView) return hasActionDataFor(field);
+  const shouldShowMini = (field: string) => {
+    // View mode: show if any action data exists
+    if (isView) return hasActionDataFor(field);
 
-  // Edit mode: only for the gap fields AND when value > 3 OR action data exists
-  const isGapField = (MINI_PHYSICAL_KEYS as readonly string[]).includes(field);
-  if (!isGapField) return false;
+    // Edit mode: only for the gap fields AND when value > 3 OR action data exists
+    const isGapField = (MINI_PHYSICAL_KEYS as readonly string[]).includes(
+      field
+    );
+    if (!isGapField) return false;
 
-  const val = getNum((formData as any)[field]);
-  return (
-    (Number.isFinite(val) && val > ACTION_THRESHOLD) || hasActionDataFor(field)
-  );
-};
-
+    const val = getNum((formData as any)[field]);
+    return (
+      (Number.isFinite(val) && val > ACTION_THRESHOLD) ||
+      hasActionDataFor(field)
+    );
+  };
 
   return (
     <SafeAreaView>
@@ -690,7 +695,7 @@ const shouldShowMini = (field: string) => {
               onImageDelete={(index) => handleDeleteImages(index, "head")}
               reset={resetCaptureFlag}
               mandatoryFieldRef={mandatoryFieldRef}
-               showErrors={showMiniErrors} 
+              showErrors={showMiniErrors}
             />
           )}
 
@@ -746,59 +751,70 @@ const shouldShowMini = (field: string) => {
           )}
 
           {/* Render the 4 MINI capture fields with MiniCapture */}
-{(["head","hinge","closing","threshold"] as const).map((field) => (
-  <View key={field}>
-    <Text style={styles.label}>
-      {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
-    </Text>
-    <TextInput
-      style={[styles.input, errors[field] && styles.errorInput]}
-      keyboardType="numeric"
-      value={String((formData as any)[field] ?? "")}
-      editable={!isView}
-      onChangeText={(text) => handleFormDataChange(field, text)}
-    />
-    {errors[field] && <Text style={styles.errorText}>{errors[field]}</Text>}
+          {(["head", "hinge", "closing", "threshold"] as const).map((field) => (
+            <View key={field}>
+              <Text style={styles.label}>
+                {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
+              </Text>
+              <TextInput
+                style={[styles.input, errors[field] && styles.errorInput]}
+                keyboardType="numeric"
+                value={String((formData as any)[field] ?? "")}
+                editable={!isView}
+                onChangeText={(text) => handleFormDataChange(field, text)}
+              />
+              {errors[field] && (
+                <Text style={styles.errorText}>{errors[field]}</Text>
+              )}
 
-    {shouldShowMini(field) && (
-      <MiniCapture
-        key={`mc-${isView ? "view" : "edit"}-${field}`}
-        isView={isView}
-        fieldValue={field}
-        formData={formData}
-        savedImages={getImagesForField(field)}
-        onImagesChange={(images) => handleImagesChangeMini(images, field)}
-        onResetChange={() => handleResetAction(field)}
-        onHandleActionFieldsChange={(val, type) =>
-          handleActionFieldsChange(field, type, val)
-        }
-        onImageDelete={(index) => handleDeleteImages(index, field)}
-        reset={resetCaptureFlag}
-        mandatoryFieldRef={mandatoryFieldRef}
-        showErrors={showMiniErrors}
-      />
-    )}
-  </View>
-))}
+              {shouldShowMini(field) && (
+                <MiniCapture
+                  key={`mc-${isView ? "view" : "edit"}-${field}`}
+                  isView={isView}
+                  fieldValue={field}
+                  formData={formData}
+                  savedImages={getImagesForField(field)}
+                  onImagesChange={(images) =>
+                    handleImagesChangeMini(images, field)
+                  }
+                  onResetChange={() => handleResetAction(field)}
+                  onHandleActionFieldsChange={(val, type) =>
+                    handleActionFieldsChange(field, type, val)
+                  }
+                  onImageDelete={(index) => handleDeleteImages(index, field)}
+                  reset={resetCaptureFlag}
+                  mandatoryFieldRef={mandatoryFieldRef}
+                  showErrors={showMiniErrors}
+                />
+              )}
+            </View>
+          ))}
 
-{/* Render the non-gap physical inputs WITHOUT MiniCapture */}
-{(["doorThickness","frameDepth","doorSize","fullDoorsetSize"] as const).map((field) => (
-  <View key={field}>
-    <Text style={styles.label}>
-      {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
-    </Text>
-    <TextInput
-      style={[styles.input, errors[field] && styles.errorInput]}
-      keyboardType="numeric"
-      value={String((formData as any)[field] ?? "")}
-      editable={!isView}
-      onChangeText={(text) => handleFormDataChange(field, text)}
-    />
-    {errors[field] && <Text style={styles.errorText}>{errors[field]}</Text>}
-  </View>
-))}
-
-
+          {/* Render the non-gap physical inputs WITHOUT MiniCapture */}
+          {(
+            [
+              "doorThickness",
+              "frameDepth",
+              "doorSize",
+              "fullDoorsetSize",
+            ] as const
+          ).map((field) => (
+            <View key={field}>
+              <Text style={styles.label}>
+                {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
+              </Text>
+              <TextInput
+                style={[styles.input, errors[field] && styles.errorInput]}
+                keyboardType="numeric"
+                value={String((formData as any)[field] ?? "")}
+                editable={!isView}
+                onChangeText={(text) => handleFormDataChange(field, text)}
+              />
+              {errors[field] && (
+                <Text style={styles.errorText}>{errors[field]}</Text>
+              )}
+            </View>
+          ))}
 
           {/* === Compliance Check (editable + MiniCapture rules) === */}
           <Text style={styles.sectionTitle}>Compliance Check</Text>
@@ -1105,104 +1121,6 @@ const shouldShowMini = (field: string) => {
             />
           </View>
 
-{/* === Compliance Check (REPLACED) === */}
-<Text style={styles.sectionTitle}>Compliance Check</Text>
-
-{(() => {
-  // We still render the "Door contains glazing" toggle to gate Pyro Glazing
-  const items: { key: ComplianceKey; label: string; show?: boolean }[] = [
-    { key: "intumescentStrips", label: "Are there intumescent strips?" },
-
-    // Self Closing Device (no MiniCapture here)
-    { key: "selfClosingDevice", label: "Self closing device?" },
-
-    // Fire door Keep Locked sign (only show when SCD is OFF or via external flag)
-    {
-      key: "fireLockedSign",
-      label: "Fire door Keep Locked sign?",
-      show: complianceCheck.selfClosingDevice === false || isFireKeepLocked,
-    },
-
-    // Fire door Keep Shut sign (always rendered)
-    { key: "fireShutSign", label: "Fire door Keep Shut sign?" },
-
-    // (Optional switches you still want to keep without MiniCapture)
-    { key: "holdOpenDevice", label: "Is there a hold open device?" },
-    {
-      key: "visibleCertification",
-      label: "Is certification visible on fire door?",
-    },
-
-    // Gate for Pyro Glazing
-    { key: "doorGlazing", label: "Does the door contain glazing?" },
-
-    {
-      key: "pyroGlazing",
-      label: "Is glazing pyro glazing?",
-      show: complianceCheck.doorGlazing === true,
-    },
-  ];
-
-  return items
-    .filter((i) => i.show === undefined || i.show) // respect visibility gates
-    .map(({ key, label }) => {
-      const showMini = showComplianceMini(key);
-
-      return (
-        <View key={key} style={{ marginBottom: 16 }}>
-          <View style={styles.complianceItem}>
-            <Text style={styles.label}>{label}</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={!!complianceCheck[key]}
-                onValueChange={(val) => {
-                  // Special handling for Door Glazing:
-                  if (key === "doorGlazing") {
-                    if (val === false) {
-                      // If glazing turned OFF, also turn OFF Pyro Glazing and clear its actions
-                      handleComplianceToggle("pyroGlazing", false);
-                      handleResetAction("pyroGlazing");
-                    }
-                    handleComplianceToggle("doorGlazing", val);
-                    return;
-                  }
-
-                  handleComplianceToggle(key, val);
-                }}
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View>
-
-          {/* MiniCapture only for the 4 specified keys and only when false */}
-          {showMini && (
-            <MiniCapture
-              key={`cc-mc-${key}-${String(complianceCheck[key] === false)}`}
-              isView={isView}
-              fieldValue={key}
-              formData={complianceCheck}
-              savedImages={getComplianceImagesFor(key)}
-              onImagesChange={(imgs) => handleImagesChangeMini(imgs, key)}
-              onImageDelete={(i) => handleDeleteImages(i, key)}
-              onResetChange={() => handleResetAction(key)}
-              onHandleActionFieldsChange={(val, type) =>
-                handleComplianceActionFieldsChange(key, type, val)
-              }
-              reset={resetCaptureFlag}
-              mandatoryFieldRef={mandatoryFieldRef}
-              // if you want to surface missing MiniCapture fields visually:
-              // showErrors={showMiniErrors}
-            />
-          )}
-        </View>
-      );
-    });
-})()}
-
-
-
           {/* Additional Comments */}
           <View
             style={{
@@ -1238,60 +1156,60 @@ const shouldShowMini = (field: string) => {
               />
             </View>
           </View>
-          {!isView && (
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "center",
-                padding: 20,
-                marginTop: 5,
-              }}
-            >
-              {/* <TouchableOpacity
-                style={{
-                  backgroundColor: "#ccc",
-                  paddingVertical: 12,
-                  paddingHorizontal: 25,
-                  borderRadius: 8,
-                }}
-                onPress={() => navigation.goBack()}
-              >
-                <Text style={{ color: "#000", fontWeight: "bold" }}>Back</Text>
-              </TouchableOpacity> */}
-
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#034694",
-                  paddingVertical: 12,
-                  paddingHorizontal: 25,
-                  borderRadius: 8,
-                }}
-                onPress={() => {
-                  const ok = validateRequired();
-                  if (!ok) {
-                    // if you want to let the parent know:
-                    handleValidationOnSave?.("Invalid");
-                    return;
-                  }
-                  handleSubmit("Compliant");
-                }}
-                disabled={submitting}
-              >
-                <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                  {submitting ? "Submitting..." : "Submit"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* Add additional compliance fields similarly */}
         </View>
+
+        {!isView && (
+          <View>
+            <TouchableOpacity
+              style={[
+                {
+                  backgroundColor: "#ffffff",
+                  marginTop: 10,
+                  marginBottom: 20,
+                  paddingVertical: 14,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 2,
+                  elevation: 2,
+                  borderWidth: 1,
+                  borderColor: "#000000",
+                },
+              ]}
+              onPress={() => {
+                const ok = validateRequired();
+                if (!ok) {
+                  handleValidationOnSave?.("Invalid");
+                  return;
+                }
+                handleSubmit("Compliant");
+              }}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <Loader />
+              ) : (
+                <Text
+                  style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}
+                >
+                  Submit
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={[
             {
               backgroundColor: "#ffffff", // white background
-              marginTop: 30,
+              marginTop: 10,
               marginBottom: 20,
               paddingVertical: 14,
               borderRadius: 8,

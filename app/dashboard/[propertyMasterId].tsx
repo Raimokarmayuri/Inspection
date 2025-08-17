@@ -1166,7 +1166,7 @@ const handleImagesChange = async (newImages: string[], field: string) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.card}>
+        {/* <View style={styles.card}> */}
           <Text style={styles.sectionTitle}>Basic Information</Text>
 
           <Text style={styles.label}>Building Name</Text>
@@ -1316,7 +1316,10 @@ const handleImagesChange = async (newImages: string[], field: string) => {
             mandatoryFieldRef={mandatoryFieldRef}
             allowGallery={true} // ✅ add this to let Capture also open gallery
           />
-        </View>
+           {errors.doorPhoto && (
+            <Text style={styles.errorText}>{errors.doorPhoto}</Text>
+          )}
+        {/* </View> */}
 
         {/* QR CODE SECTION */}
         <View style={styles.card}>
@@ -1993,6 +1996,7 @@ function setFloorPlanImages(combined: any[]) {
 function setHighlightDoor(arg0: boolean) {
   throw new Error("Function not implemented.");
 }
+
 function showAlert(arg0: string, arg1: string) {
-  throw new Error("Function not implemented.");
+  // throw new Error("Function not implemented.");
 }
