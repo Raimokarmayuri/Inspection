@@ -1,5 +1,4 @@
 import { Picker } from "@react-native-picker/picker";
-
 import { useNavigation } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -18,16 +17,15 @@ import {
   ActionMenuFlag,
   BasicFormData,
   ComplianceCheck,
-  FormData as InspectionFormData,
+  FormData,
 } from "../types";
 import Capture from "./Capture";
-import Loader from "./Loader";
 import MiniCapture from "./MiniCapture";
 
 interface FormProps {
   isView: boolean;
   basicFormData: BasicFormData;
-  formData: InspectionFormData;
+  formData: FormData;
   doorPhoto: string[];
   complianceCheck: ComplianceCheck;
   actionmenuFlag: ActionMenuFlag;
@@ -43,30 +41,34 @@ interface FormProps {
   validationFlag: boolean;
   isLoading: boolean;
 
-  // mandatoryFieldRef: React.MutableRefObject<
-  //   Record<string, TextInput | Picker | null>
-  // >;
-
   mandatoryFieldRef: React.MutableRefObject<Record<string, TextInput | null>>;
 
   handleChange: (field: string, value: string) => void;
-  handleFormDataChange: (field: string, value: string) => void;
-  handleGapsChange: (field: string, value: string) => void;
-  handleComplianceToggle: (
-    field: keyof ComplianceCheck,
-    value: boolean
-  ) => void;
-  handleImagesChange: (images: string[], field: string) => void;
-  handleImagesChangeMini: (images: string[], field: string) => void;
-  handleDeleteImages: (index: number, field: string) => void;
-  // handleResetAction: (field: string, type: string) => void;
-  handleResetAction: (field: string) => void;
   handleComplianceActionFieldsChange: (
     field: string,
     type: string,
     value: string
   ) => void;
 
+  handleFormDataChange: (field: string, value: string) => void;
+  handleGapsChange: (field: string, value: string) => void;
+  handleComplianceToggle: (
+    field:
+      | "intumescentStrips"
+      | "coldSmokeSeals"
+      | "selfClosingDevice"
+      | "fireLockedSign"
+      | "fireShutSign"
+      | "holdOpenDevice"
+      | "visibleCertification"
+      | "doorGlazing"
+      | "pyroGlazing",
+    nextVal: boolean // 👈 IMPORTANT
+  ) => void;
+  handleImagesChange: (images: string[], field: string) => void;
+  handleImagesChangeMini: (images: string[], field: string) => void;
+  handleDeleteImages: (index: number, field: string) => void;
+  handleResetAction: (field: string, type: "PHYSICAL" | "COMPLIANCE") => void;
   handleActionFieldsChange: (
     field: string,
     type: string,
@@ -79,9 +81,6 @@ interface FormProps {
   handleSubmit: (status?: string) => Promise<void>;
 
   handleValidationOnSave: (status: string) => void;
-
-  errors?: Record<string, string>;
-  onClearError?: (field: string) => void;
 }
 
 const hingeMap: Record<string, string> = { "1": "Left", "2": "Right" };
@@ -113,7 +112,7 @@ const FormComponent: React.FC<FormProps> = ({
   basicFormData,
   formData,
   complianceCheck,
-  actionmenuFlag,
+  actionmenuFlag, // (not used here, but kept for prop compatibility)
   actionImages,
   floorPlanImages,
   resetCaptureFlag,
@@ -132,7 +131,6 @@ const FormComponent: React.FC<FormProps> = ({
   handleImagesChangeMini,
   handleDeleteImages,
   handleResetAction,
-  handleComplianceActionFieldsChange,
   handleActionFieldsChange,
   handleFireResistanceChange,
   generateQRCode,
@@ -140,295 +138,12 @@ const FormComponent: React.FC<FormProps> = ({
   handleCancel,
   handleSubmit,
   handleValidationOnSave,
+  handleComplianceActionFieldsChange,
 }) => {
   const navigation = useNavigation();
   const [submitting, setSubmitting] = useState(false);
 
-  // put right after: const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showMiniErrors, setShowMiniErrors] = useState(false);
-
-  const isEmpty = (v: any) =>
-    v === undefined ||
-    v === null ||
-    (typeof v === "string" && v.trim() === "") ||
-    (Array.isArray(v) && v.length === 0);
-
-  const isUnselected = (v: any) => v === "" || v === "Select";
-
-  /** Which physical fields can open MiniCapture */
-  // const PHYSICAL_KEYS = [
-  //   "head",
-  //   "hinge",
-  //   "closing",
-  //   "threshold",
-  //   "doorThickness",
-  //   "frameDepth",
-  //   "doorSize",
-  //   "fullDoorsetSize",
-  // ] as const;
-  // Replace your PHYSICAL_KEYS with:
-  const MINI_PHYSICAL_KEYS = ["head", "hinge", "closing", "threshold"] as const;
-
-  // (optional) keep a convenience array of all physical inputs (for validation/inputs)
-  const ALL_PHYSICAL_INPUTS = [
-    "head",
-    "hinge",
-    "closing",
-    "threshold",
-    "doorThickness",
-    "frameDepth",
-    "doorSize",
-    "fullDoorsetSize",
-  ] as const;
-
-  /** Pretty names for the alert list */
-  const LABELS: Record<string, string> = {
-    head: "Head",
-    hinge: "Hinge",
-    closing: "Closing",
-    threshold: "Threshold",
-    doorThickness: "Door Thickness",
-    frameDepth: "Frame Depth",
-    doorSize: "Door Size",
-    fullDoorsetSize: "Full Doorset Size",
-    intumescentStrips: "Intumescent Strips",
-    coldSmokeSeals: "Cold Smoke Seals",
-    fireLockedSign: "Keep Locked Sign",
-    fireShutSign: "Keep Shut Sign",
-    pyroGlazing: "Pyro Glazing",
-  };
-
-  /** Return missing fields for a MiniCapture block (Severity/Category/DueDate/Remediation) */
-  const requiredMiniErrorsForPrefix = (obj: any, prefix: string): string[] => {
-    const val = (k: string) => String(obj?.[`${prefix}${k}`] ?? "").trim();
-    const sel = (v: string) => v === "" || v === "Select";
-
-    const severity = val("Severity");
-    const category = val("Category");
-    const dueDate = val("DueDate");
-    const remediation = val("Remediation");
-
-    const missing: string[] = [];
-    if (sel(severity)) missing.push("Severity");
-    if (sel(category)) missing.push("Category");
-    if (sel(dueDate)) missing.push("Due Date");
-    if (remediation === "") missing.push("Remedial/Action required");
-    return missing;
-  };
-
-  /** Build a single list of all missing MiniCapture requirements */
-  // const collectMiniCaptureMissing = (): string[] => {
-  //   const lines: string[] = [];
-
-  //   // PHYSICAL: if MiniCapture is shown for a field, validate it
-  //   PHYSICAL_KEYS.forEach((k) => {
-  //     if (shouldShowMini(k)) {
-  //       const miss = requiredMiniErrorsForPrefix(formData, k);
-  //       if (miss.length) lines.push(`${LABELS[k]}: ${miss.join(", ")}`);
-  //     }
-  //   });
-
-  //   // COMPLIANCE: only those that can show MiniCapture per your rules
-  //   const COMPLIANCE_KEYS = [
-  //     "intumescentStrips",
-  //     "coldSmokeSeals",
-  //     "fireLockedSign",
-  //     "fireShutSign",
-  //     "pyroGlazing",
-  //   ] as const;
-
-  //   COMPLIANCE_KEYS.forEach((k) => {
-  //     // respect your existing visibility rules
-  //     const allowed =
-  //       (k !== "coldSmokeSeals" || isColdSeals) &&
-  //       (k !== "pyroGlazing"     || complianceCheck.doorGlazing === true);
-
-  //     if (showComplianceMini(k as any, allowed)) {
-  //       const miss = requiredMiniErrorsForPrefix(complianceCheck, k);
-  //       if (miss.length) lines.push(`${LABELS[k]}: ${miss.join(", ")}`);
-  //     }
-  //   });
-
-  //   return lines;
-  // };
-
-  // const isEmpty = (v: any) =>
-  //   v === undefined ||
-  //   v === null ||
-  //   (typeof v === "string" && v.trim() === "") ||
-  //   (Array.isArray(v) && v.length === 0);
-
-  // const isUnselected = (v: any) => v === "" || v === "Select";
-
-  /** Validate only for edit (not view). Returns true if valid. */
-  const validateRequired = () => {
-    if (isView) return true; // nothing to validate in pure view mode
-
-    const e: Record<string, string> = {};
-
-    // Basic
-    if (isEmpty(basicFormData.floor)) e.floor = "Floor is required";
-    if (isEmpty(basicFormData.floorPlan))
-      e.floorPlan = "Floor plan image is required";
-
-    if (isUnselected(formData.doorType)) e.doorType = "Door type is required";
-
-    if (isEmpty(formData.doorPhoto)) e.doorPhoto = "Door photo is required";
-
-    if (isEmpty(formData.doorNumber)) e.doorNumber = "Door number is required";
-
-    if (isUnselected(formData.fireResistance))
-      e.fireResistance = "Fire rating is required";
-
-    if (isUnselected(formData.hingeLocation))
-      e.hingeLocation = "Hinge location is required";
-
-    // Measurements
-    (
-      [
-        "head",
-        "hinge",
-        "closing",
-        "threshold",
-        "doorThickness",
-        "frameDepth",
-        "doorSize",
-        "fullDoorsetSize",
-      ] as const
-    ).forEach((k) => {
-      if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
-    });
-
-    ALL_PHYSICAL_INPUTS.forEach((k) => {
-      if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
-    });
-
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  // --- Compliance helpers (paste inside the component) ---
-  // ---- Compliance helpers ----
-  // const COMPLIANCE_KEYS = [
-  //   "intumescentStrips",
-  //   "coldSmokeSeals",
-  //   "selfClosingDevice",
-  //   "fireLockedSign",
-  //   "fireShutSign",
-  //   "holdOpenDevice",
-  //   "visibleCertification",
-  //   "doorGlazing",
-  //   "pyroGlazing",
-  // ] as const;
-
-  // --- Compliance helpers (replace your current block) ---
-  const COMPLIANCE_KEYS = [
-    "intumescentStrips",
-    "coldSmokeSeals",
-    "selfClosingDevice",
-    "fireLockedSign",
-    "fireShutSign",
-    "holdOpenDevice",
-    "visibleCertification",
-    "doorGlazing",
-    "pyroGlazing",
-  ] as const;
-
-  type ComplianceKey =
-    | "intumescentStrips"
-    | "coldSmokeSeals"
-    | "selfClosingDevice"
-    | "fireLockedSign"
-    | "fireShutSign"
-    | "holdOpenDevice"
-    | "visibleCertification"
-    | "doorGlazing"
-    | "pyroGlazing";
-
-  // ✅ Only these 4 show MiniCapture, and only when value === false
-  const MINI_CAPTURE_KEYS: ComplianceKey[] = [
-    "intumescentStrips",
-    "fireLockedSign",
-    "fireShutSign",
-    "pyroGlazing",
-  ];
-
-  // Show MiniCapture strictly when the switch is OFF, honoring gates.
-  const showComplianceMini = (key: ComplianceKey) => {
-    // Only our 4 keys are eligible
-    if (!MINI_CAPTURE_KEYS.includes(key)) return false;
-
-    // Gating:
-    // - pyroGlazing only if glazing is present
-    if (key === "pyroGlazing" && complianceCheck.doorGlazing !== true)
-      return false;
-
-    // - fireLockedSign only visible if SCD is OFF or external flag says to show it
-    if (
-      key === "fireLockedSign" &&
-      !(complianceCheck.selfClosingDevice === false || isFireKeepLocked)
-    )
-      return false;
-
-    // Show MiniCapture only when the switch is false
-    return complianceCheck[key] === false;
-  };
-
-  // Merge persisted + session images for compliance
-  const getComplianceImagesFor = (key: ComplianceKey) =>
-    mergeImages(
-      (complianceCheck as any)?.[`${key}Images`] as string[] | undefined,
-      actionImages?.[key] as string[] | undefined
-    );
-
-  // merge persisted + session images for compliance in BOTH view & edit
-  // const getComplianceImagesFor = (key: ComplianceKey) =>
-  //   mergeImages(
-  //     (complianceCheck as any)?.[`${key}Images`] as string[] | undefined,
-  //     actionImages?.[key] as string[] | undefined
-  //   );
-
-  // whether this compliance key already has saved action data
-  const hasComplianceActionData = (key: ComplianceKey) => {
-    const cc = complianceCheck as any;
-    const imgs = getComplianceImagesFor(key) || [];
-    return Boolean(
-      cc?.[`${key}Timeline`] ||
-        cc?.[`${key}Severity`] ||
-        cc?.[`${key}Category`] ||
-        cc?.[`${key}Remediation`] ||
-        cc?.[`${key}Comments`] ||
-        cc?.[`${key}DueDate`] ||
-        cc?.[`${key}photos`] ||
-        imgs.length > 0
-    );
-  };
-
-  //   // show MiniCapture when false (non-compliant) OR when saved data exists
-  // const showComplianceMini = (key: ComplianceKey) => {
-  //   // applicability gates
-  //   if (key === "coldSmokeSeals" && !isColdSeals) return false;
-  //   if (key === "pyroGlazing" && complianceCheck.doorGlazing !== true) return false;
-  //   if (
-  //     key === "fireLockedSign" &&
-  //     !(complianceCheck.selfClosingDevice === false || isFireKeepLocked)
-  //   ) return false;
-
-  //   // treat undefined as off
-  //   return complianceCheck[key] !== true;
-  // };
-  // Should we show the MiniCapture panel for compliance?
-  // Show when value is FALSE (non-compliant) OR there is saved action data.
-  // const shouldShowComplianceMini = (
-  //   key: ComplianceKey,
-  //   allowedByShow: boolean
-  // ) => {
-  //   if (!allowedByShow) return false;
-  //   if (!complianceMiniEnabled.includes(key)) return false;
-  //   return complianceCheck[key] === false || hasComplianceActionData(key);
-  // };
-
+  // ---------- PHYSICAL MiniCapture helpers ----------
   const getImagesForField = (field: string) => {
     // In view mode we can merge; in edit mode, actionImages is the single source of truth
     return isView
@@ -449,36 +164,167 @@ const FormComponent: React.FC<FormProps> = ({
         fd[`${field}Remediation`] ||
         fd[`${field}Comments`] ||
         fd[`${field}DueDate`] ||
-        fdImgs.length > 0 || // ✅ consider images from formData
-        actImgs.length > 0 // ✅ and images captured this session
+        fdImgs.length > 0 ||
+        actImgs.length > 0
     );
   };
 
-  // const ACTION_THRESHOLD = 3;
-
-  // slightly sturdier number parser
+  const ACTION_THRESHOLD = 3;
   const getNum = (v: any) => {
     if (v === null || v === undefined) return NaN;
     const n = Number(String(v).trim());
     return Number.isFinite(n) ? n : NaN;
   };
 
-  const ACTION_THRESHOLD = 3;
-
   const shouldShowMini = (field: string) => {
-    // View mode: show if any action data exists
+    // In view mode: show if any action data (severity/category/images/comments/etc.) exists
     if (isView) return hasActionDataFor(field);
 
-    // Edit mode: only for the gap fields AND when value > 3 OR action data exists
-    const isGapField = (MINI_PHYSICAL_KEYS as readonly string[]).includes(
-      field
-    );
-    if (!isGapField) return false;
-
+    // In edit mode: show if value is strictly > 3 OR there is existing action data
     const val = getNum((formData as any)[field]);
     return (
       (Number.isFinite(val) && val > ACTION_THRESHOLD) ||
       hasActionDataFor(field)
+    );
+  };
+
+  // ---------- COMPLIANCE MiniCapture helpers ----------
+  const getComplianceImages = (
+    key:
+      | "intumescentStrips"
+      | "coldSmokeSeals"
+      | "selfClosingDevice"
+      | "fireLockedSign"
+      | "fireShutSign"
+      | "holdOpenDevice"
+      | "visibleCertification"
+      | "doorGlazing"
+      | "pyroGlazing"
+  ) => {
+    return isView
+      ? mergeImages(
+          (complianceCheck as any)[`${key}Images`] as string[] | undefined,
+          actionImages?.[key] as string[] | undefined
+        )
+      : actionImages?.[key] ?? [];
+  };
+
+  const hasComplianceActionData = (
+    key:
+      | "intumescentStrips"
+      | "coldSmokeSeals"
+      | "selfClosingDevice"
+      | "fireLockedSign"
+      | "fireShutSign"
+      | "holdOpenDevice"
+      | "visibleCertification"
+      | "doorGlazing"
+      | "pyroGlazing"
+  ) => {
+    const cc = complianceCheck as any;
+  const imgsSaved = (cc[`${key}Images`] as string[] | undefined) ?? [];
+  const imgsSession = actionImages?.[key] ?? [];
+
+  const isFilled = (v: any) => {
+    if (v == null) return false;
+    if (typeof v === "string") {
+      const t = v.trim().toLowerCase();
+      return t !== "" && t !== "select";
+    }
+    return true;
+  };
+
+  return Boolean(
+    isFilled(cc[`${key}Severity`]) ||
+    isFilled(cc[`${key}Category`]) ||
+    isFilled(cc[`${key}Remediation`]) ||
+    isFilled(cc[`${key}Comments`]) ||
+    isFilled(cc[`${key}DueDate`]) ||
+    imgsSaved.length > 0 ||
+    imgsSession.length > 0
+  );
+
+  };
+
+  // Edit mode: show whenever toggled NO, or if there’s existing action data
+  // View mode: show only if there’s existing action data
+  const shouldShowComplianceMini = (
+    key:
+      | "intumescentStrips"
+      | "coldSmokeSeals"
+      | "selfClosingDevice"
+      | "fireLockedSign"
+      | "fireShutSign"
+      | "holdOpenDevice"
+      | "visibleCertification"
+      | "doorGlazing"
+      | "pyroGlazing"
+  ) => {
+    // const value = !!(complianceCheck as any)[key]; // true = YES
+    // return isView ? hasComplianceActionData(key) : (!value || hasComplianceActionData(key));
+    const value = (complianceCheck as any)[key] === true; // only literal true is YES
+    return isView
+      ? hasComplianceActionData(key)
+      : !value || hasComplianceActionData(key);
+  };
+
+  // ---------- One clean row ----------
+  const ComplianceRow: React.FC<{
+    keyName:
+      | "intumescentStrips"
+      | "coldSmokeSeals"
+      | "selfClosingDevice"
+      | "fireLockedSign"
+      | "fireShutSign"
+      | "holdOpenDevice"
+      | "visibleCertification"
+      | "doorGlazing"
+      | "pyroGlazing";
+    label: string;
+    show?: boolean;
+  }> = ({ keyName, label, show = true }) => {
+    if (!show) return null;
+    const currentVal = !!(complianceCheck as any)[keyName];
+
+    const yes = (complianceCheck as any)[keyName] === true;
+    const showMiniBecauseNo = !yes;
+    const hasData = hasComplianceActionData(keyName);
+
+    return (
+      <>
+        <View style={styles.complianceItem}>
+          <Text style={styles.label}>{label}</Text>
+          <View style={styles.switchContainer}>
+            <Text style={styles.toggleText}>N</Text>
+            <Switch
+              value={currentVal}
+              onValueChange={(next) => handleComplianceToggle(keyName, next)}
+              disabled={isView}
+            />
+            <Text style={styles.toggleText}>Y</Text>
+          </View>
+        </View>
+
+        {shouldShowComplianceMini(keyName) && (
+          <MiniCapture
+            key={`cc-${keyName}-${yes ? "Y" : "N"}`}
+            isView={isView}
+            fieldValue={keyName}
+            formData={complianceCheck as any}
+            savedImages={getComplianceImages(keyName)}
+            onImagesChange={(images) => handleImagesChangeMini(images, keyName)}
+            onImageDelete={(index) => handleDeleteImages(index, keyName)}
+            onResetChange={() => handleResetAction(keyName, "COMPLIANCE")}
+            onHandleActionFieldsChange={(val, type) =>
+              handleComplianceActionFieldsChange(keyName, type, val)
+            }
+            reset={resetCaptureFlag}
+            mandatoryFieldRef={mandatoryFieldRef}
+            // 👇 this is the important part
+            forceShow={!isView && (showMiniBecauseNo || hasData)}
+          />
+        )}
+      </>
     );
   };
 
@@ -518,15 +364,14 @@ const FormComponent: React.FC<FormProps> = ({
 
           <Text style={styles.label}>Floor</Text>
           <TextInput
-            style={[styles.input, errors.floor && styles.errorInput]}
+            style={styles.input}
             keyboardType="numeric"
             value={String(basicFormData.floor || 0)}
             editable={!isView}
             onChangeText={(text) => handleChange("floor", text)}
           />
-          {errors.floor && <Text style={styles.errorText}>{errors.floor}</Text>}
 
-          <View className="d-flex gap-3 flex-wrap" style={styles.imageSection}>
+          <View style={styles.imageSection}>
             <Text style={styles.label}>Floor Plan</Text>
             <Capture
               isView={isView}
@@ -538,9 +383,6 @@ const FormComponent: React.FC<FormProps> = ({
               fieldValue={"floorFile"}
               singleImageCapture
             />
-            {errors.floorPlan && (
-              <Text style={styles.errorText}>{errors.floorPlan}</Text>
-            )}
           </View>
 
           <Text style={styles.label}>Door Number</Text>
@@ -549,9 +391,6 @@ const FormComponent: React.FC<FormProps> = ({
             value={formData.doorNumber || ""}
             editable={false}
           />
-          {errors.doorNumber && (
-            <Text style={styles.errorText}>{errors.doorNumber}</Text>
-          )}
 
           <Text style={styles.label}>Door Type</Text>
           {isView ? (
@@ -559,11 +398,9 @@ const FormComponent: React.FC<FormProps> = ({
               {getDoorTypeName(formData?.doorType, doorTypesOption) || "—"}
             </Text>
           ) : (
-            <View
-              style={[styles.pickerWrap, errors.doorType && styles.errorInput]}
-            >
+            <View style={styles.pickerWrap}>
               <Picker
-                key={`doorType-${isView ? "view" : "edit"}`}
+                key={`doorType-${isView ? "view" : "edit"}`} // force remount on mode switch
                 selectedValue={String(formData?.doorType ?? "")}
                 onValueChange={(value) =>
                   handleFormDataChange("doorType", value)
@@ -583,9 +420,6 @@ const FormComponent: React.FC<FormProps> = ({
               </Picker>
             </View>
           )}
-          {errors.doorType && (
-            <Text style={styles.errorText}>{errors.doorType}</Text>
-          )}
 
           {doorOtherFlag && (
             <>
@@ -599,7 +433,7 @@ const FormComponent: React.FC<FormProps> = ({
             </>
           )}
 
-          <View className="d-flex gap-3 flex-wrap" style={styles.imageSection}>
+          <View style={styles.imageSection}>
             <Text style={styles.label}>Door Photo</Text>
             <Capture
               isView={isView}
@@ -611,23 +445,15 @@ const FormComponent: React.FC<FormProps> = ({
               fieldValue={"doorFile"}
               singleImageCapture
             />
-            {errors.doorPhoto && (
-              <Text style={styles.errorText}>{errors.doorPhoto}</Text>
-            )}
           </View>
-          {/* 🔥 Fire Rating and Certification */}
+
           <Text style={styles.label}>Fire Rating and Certification*</Text>
           {isView ? (
             <Text style={styles.readOnlyValue}>
               {fireRatingMap[String(formData?.fireResistance ?? "")] || "—"}
             </Text>
           ) : (
-            <View
-              style={[
-                styles.pickerWrap,
-                errors.fireResistance && styles.errorInput,
-              ]}
-            >
+            <View style={styles.pickerWrap}>
               <Picker
                 key={`fire-${isView ? "view" : "edit"}`}
                 selectedValue={String(formData?.fireResistance ?? "")}
@@ -649,14 +475,10 @@ const FormComponent: React.FC<FormProps> = ({
               </Picker>
             </View>
           )}
-          {errors.fireResistance && (
-            <Text style={styles.errorText}>{errors.fireResistance}</Text>
-          )}
 
           <Text style={styles.sectionTitle}>Physical Measurements</Text>
 
-          {/* 🧱 Head(mm) Field with MiniCapture */}
-          {/* Head(mm) */}
+          {/* Head (mm) */}
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.label}>
               Head(mm)<Text style={{ color: "red" }}>*</Text>
@@ -673,10 +495,7 @@ const FormComponent: React.FC<FormProps> = ({
                   mandatoryFieldRef.current.head = el;
               }}
             />
-            {errors.head && <Text style={styles.errorText}>{errors.head}</Text>}
           </View>
-
-          {/* ✅ ALWAYS show MiniCapture */}
 
           {shouldShowMini("head") && (
             <MiniCapture
@@ -688,35 +507,15 @@ const FormComponent: React.FC<FormProps> = ({
               onImagesChange={(images) =>
                 handleImagesChangeMini(images, "head")
               }
-              onResetChange={() => handleResetAction("head")}
+              onResetChange={() => handleResetAction("head", "PHYSICAL")}
               onHandleActionFieldsChange={(val, type) =>
                 handleActionFieldsChange("head", type, val)
               }
               onImageDelete={(index) => handleDeleteImages(index, "head")}
               reset={resetCaptureFlag}
               mandatoryFieldRef={mandatoryFieldRef}
-              showErrors={showMiniErrors}
             />
           )}
-
-          {/* {actionmenuFlag.head && (
-            <MiniCapture
-              isView={isView}
-              fieldValue="head"
-              formData={formData}
-              onImagesChange={(images) =>
-                handleImagesChangeMini(images, "head")
-              }
-              onResetChange={() => handleResetAction("head", "PHYSICAL")}
-              onHandleActionFieldsChange={(e, field) =>
-                handleActionFieldsChange(e, field, "PHYSICAL")
-              }
-              onImageDelete={(index) => handleDeleteImages(index, "head")}
-              reset={resetCaptureFlag}
-              mandatoryFieldRef={mandatoryFieldRef}
-              savedImages={[]} // replace with actual saved images if available
-            />
-          )} */}
 
           {/* Hinge Location */}
           <Text style={styles.label}>Hinge Location</Text>
@@ -725,12 +524,7 @@ const FormComponent: React.FC<FormProps> = ({
               {hingeMap[String(formData?.hingeLocation ?? "")] || "—"}
             </Text>
           ) : (
-            <View
-              style={[
-                styles.pickerWrap,
-                errors.hingeLocation && styles.errorInput,
-              ]}
-            >
+            <View style={styles.pickerWrap}>
               <Picker
                 key={`hinge-${isView ? "view" : "edit"}`}
                 selectedValue={String(formData?.hingeLocation ?? "")}
@@ -746,26 +540,27 @@ const FormComponent: React.FC<FormProps> = ({
               </Picker>
             </View>
           )}
-          {errors.hingeLocation && (
-            <Text style={styles.errorText}>{errors.hingeLocation}</Text>
-          )}
 
-          {/* Render the 4 MINI capture fields with MiniCapture */}
-          {(["head", "hinge", "closing", "threshold"] as const).map((field) => (
+          {[
+            "hinge",
+            "closing",
+            "threshold",
+            "doorThickness",
+            "frameDepth",
+            "doorSize",
+            "fullDoorsetSize",
+          ].map((field) => (
             <View key={field}>
               <Text style={styles.label}>
                 {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
               </Text>
               <TextInput
-                style={[styles.input, errors[field] && styles.errorInput]}
+                style={styles.input}
                 keyboardType="numeric"
                 value={String((formData as any)[field] ?? "")}
                 editable={!isView}
                 onChangeText={(text) => handleFormDataChange(field, text)}
               />
-              {errors[field] && (
-                <Text style={styles.errorText}>{errors[field]}</Text>
-              )}
 
               {shouldShowMini(field) && (
                 <MiniCapture
@@ -777,335 +572,56 @@ const FormComponent: React.FC<FormProps> = ({
                   onImagesChange={(images) =>
                     handleImagesChangeMini(images, field)
                   }
-                  onResetChange={() => handleResetAction(field)}
+                  onResetChange={() => handleResetAction(field, "PHYSICAL")}
                   onHandleActionFieldsChange={(val, type) =>
                     handleActionFieldsChange(field, type, val)
                   }
                   onImageDelete={(index) => handleDeleteImages(index, field)}
                   reset={resetCaptureFlag}
                   mandatoryFieldRef={mandatoryFieldRef}
-                  showErrors={showMiniErrors}
                 />
               )}
             </View>
           ))}
 
-          {/* Render the non-gap physical inputs WITHOUT MiniCapture */}
-          {(
-            [
-              "doorThickness",
-              "frameDepth",
-              "doorSize",
-              "fullDoorsetSize",
-            ] as const
-          ).map((field) => (
-            <View key={field}>
-              <Text style={styles.label}>
-                {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
-              </Text>
-              <TextInput
-                style={[styles.input, errors[field] && styles.errorInput]}
-                keyboardType="numeric"
-                value={String((formData as any)[field] ?? "")}
-                editable={!isView}
-                onChangeText={(text) => handleFormDataChange(field, text)}
-              />
-              {errors[field] && (
-                <Text style={styles.errorText}>{errors[field]}</Text>
-              )}
-            </View>
-          ))}
-
-          {/* === Compliance Check (editable + MiniCapture rules) === */}
           <Text style={styles.sectionTitle}>Compliance Check</Text>
 
-          {/* Intumescent Strips */}
-          <View style={styles.complianceItem}>
-            <Text style={styles.label}>Intumescent Strips</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={!!complianceCheck.intumescentStrips}
-                onValueChange={(val) =>
-                  handleComplianceToggle("intumescentStrips", val)
-                }
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View>
-          {showComplianceMini("intumescentStrips") && (
-            <MiniCapture
-              key={`cc-mc-${isView ? "view" : "edit"}-intumescentStrips`}
-              isView={isView}
-              fieldValue="intumescentStrips"
-              formData={complianceCheck}
-              savedImages={getComplianceImagesFor("intumescentStrips")}
-              onImagesChange={(images) =>
-                handleImagesChangeMini(images, "intumescentStrips")
-              }
-              onImageDelete={(index) =>
-                handleDeleteImages(index, "intumescentStrips")
-              }
-              // onResetChange={() =>
-              //   handleResetAction("intumescentStrips", "COMPLIANCE")
-              // }
-              onResetChange={() => handleResetAction("intumescentStrips")}
-              onHandleActionFieldsChange={(val, type) =>
-                handleComplianceActionFieldsChange(
-                  "intumescentStrips",
-                  type,
-                  val
-                )
-              }
-              reset={resetCaptureFlag}
-              mandatoryFieldRef={mandatoryFieldRef}
-            />
-          )}
+          <ComplianceRow
+            keyName="intumescentStrips"
+            label="Intumescent Strips"
+          />
+          <ComplianceRow
+            keyName="coldSmokeSeals"
+            label="Cold Smoke Seals"
+            show={isColdSeals}
+          />
+          <ComplianceRow
+            keyName="selfClosingDevice"
+            label="Self Closing Device"
+          />
+          <ComplianceRow
+            keyName="fireLockedSign"
+            label="Fire Door Keep Locked Sign"
+            show={isFireKeepLocked}
+          />
+          <ComplianceRow
+            keyName="fireShutSign"
+            label="Fire Door Keep Shut Sign"
+          />
+          <ComplianceRow keyName="holdOpenDevice" label="Hold Open Device" />
+          <ComplianceRow
+            keyName="visibleCertification"
+            label="Visible Certification on Fire Door"
+          />
+          <ComplianceRow keyName="doorGlazing" label="Door Contains Glazing" />
+          <ComplianceRow
+            keyName="pyroGlazing"
+            label="Pyro Glazing"
+            show={isGlazing}
+          />
 
-          {/* Cold Smoke Seals (only for FDxS) */}
-          {isColdSeals && (
-            <>
-              <View style={styles.complianceItem}>
-                <Text style={styles.label}>Cold Smoke Seals</Text>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.toggleText}>N</Text>
-                  <Switch
-                    value={!!complianceCheck.coldSmokeSeals}
-                    onValueChange={(val) =>
-                      handleComplianceToggle("coldSmokeSeals", val)
-                    }
-                    disabled={isView}
-                  />
-                  <Text style={styles.toggleText}>Y</Text>
-                </View>
-              </View>
-              {isColdSeals && showComplianceMini("coldSmokeSeals") && (
-                <MiniCapture
-                  key={`cc-mc-${isView ? "view" : "edit"}-coldSmokeSeals`}
-                  isView={isView}
-                  fieldValue="coldSmokeSeals"
-                  formData={complianceCheck}
-                  savedImages={getComplianceImagesFor("coldSmokeSeals")}
-                  onImagesChange={(images) =>
-                    handleImagesChangeMini(images, "coldSmokeSeals")
-                  }
-                  onImageDelete={(index) =>
-                    handleDeleteImages(index, "coldSmokeSeals")
-                  }
-                  onResetChange={() => handleResetAction("coldSmokeSeals")}
-                  onHandleActionFieldsChange={(val, type) =>
-                    handleComplianceActionFieldsChange(
-                      "coldSmokeSeals",
-                      type,
-                      val
-                    )
-                  }
-                  reset={resetCaptureFlag}
-                  mandatoryFieldRef={mandatoryFieldRef}
-                />
-              )}
-            </>
-          )}
-
-          {/* Self Closing Device (OFF -> force Keep Locked = ON) */}
-          <View style={styles.complianceItem}>
-            <Text style={styles.label}>Self Closing Device</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={!!complianceCheck.selfClosingDevice}
-                onValueChange={(val) => {
-                  // if (val === false && !complianceCheck.fireLockedSign) {
-                  //   handleComplianceToggle("fireLockedSign", true);
-                  // }
-                  // handleComplianceToggle("selfClosingDevice", val);
-
-                  handleComplianceToggle("selfClosingDevice", val);
-                }}
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View>
-
-          {/* Fire door Keep Locked sign (visible if SCD is OFF or external flag) */}
-          {(complianceCheck.selfClosingDevice === false ||
-            isFireKeepLocked) && (
-            <>
-              <View style={styles.complianceItem}>
-                <Text style={styles.label}>Fire door Keep Locked sign</Text>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.toggleText}>N</Text>
-                  <Switch
-                    value={!!complianceCheck.fireLockedSign}
-                    onValueChange={(val) =>
-                      handleComplianceToggle("fireLockedSign", val)
-                    }
-                    disabled={isView}
-                  />
-                  <Text style={styles.toggleText}>Y</Text>
-                </View>
-              </View>
-              {showComplianceMini("fireLockedSign") && (
-                <MiniCapture
-                  key={`cc-mc-${isView ? "view" : "edit"}-fireLockedSign`}
-                  isView={isView}
-                  fieldValue="fireLockedSign"
-                  formData={complianceCheck}
-                  savedImages={getComplianceImagesFor("fireLockedSign")}
-                  onImagesChange={(images) =>
-                    handleImagesChangeMini(images, "fireLockedSign")
-                  }
-                  onImageDelete={(index) =>
-                    handleDeleteImages(index, "fireLockedSign")
-                  }
-                  onResetChange={() => handleResetAction("fireLockedSign")}
-                  onHandleActionFieldsChange={(val, type) =>
-                    handleComplianceActionFieldsChange(
-                      "fireLockedSign",
-                      type,
-                      val
-                    )
-                  }
-                  reset={resetCaptureFlag}
-                  mandatoryFieldRef={mandatoryFieldRef}
-                />
-              )}
-            </>
-          )}
-
-          {/* Fire door Keep Shut sign */}
-          <View style={styles.complianceItem}>
-            <Text style={styles.label}>Fire door Keep Shut sign</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={!!complianceCheck.fireShutSign}
-                onValueChange={(val) =>
-                  handleComplianceToggle("fireShutSign", val)
-                }
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View>
-          {showComplianceMini("fireShutSign") && (
-            <MiniCapture
-              key={`cc-mc-${isView ? "view" : "edit"}-fireShutSign`}
-              isView={isView}
-              fieldValue="fireShutSign"
-              formData={complianceCheck}
-              savedImages={getComplianceImagesFor("fireShutSign")}
-              onImagesChange={(images) =>
-                handleImagesChangeMini(images, "fireShutSign")
-              }
-              onImageDelete={(index) =>
-                handleDeleteImages(index, "fireShutSign")
-              }
-              onResetChange={() => handleResetAction("fireShutSign")}
-              onHandleActionFieldsChange={(val, type) =>
-                handleComplianceActionFieldsChange("fireShutSign", type, val)
-              }
-              reset={resetCaptureFlag}
-              mandatoryFieldRef={mandatoryFieldRef}
-            />
-          )}
-
-          {/* Hold Open Device */}
-          <View style={styles.complianceItem}>
-            <Text style={styles.label}>Hold open device</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={!!complianceCheck.holdOpenDevice}
-                onValueChange={(val) =>
-                  handleComplianceToggle("holdOpenDevice", val)
-                }
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View>
-
-          {/* Visible Certification */}
-          <View style={styles.complianceItem}>
-            <Text style={styles.label}>Visible certification on fire door</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={!!complianceCheck.visibleCertification}
-                onValueChange={(val) =>
-                  handleComplianceToggle("visibleCertification", val)
-                }
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View>
-
-          {/* Door Glazing (OFF -> hide Pyro Glazing & clear its action data) */}
-          <View style={styles.complianceItem}>
-            <Text style={styles.label}>Door contains glazing</Text>
-            <View style={styles.switchContainer}>
-              <Text style={styles.toggleText}>N</Text>
-              <Switch
-                value={!!complianceCheck.doorGlazing}
-                onValueChange={(val) => {
-                  if (val === false) {
-                    handleComplianceToggle("pyroGlazing", false);
-                    handleResetAction("pyroGlazing");
-                  }
-                  handleComplianceToggle("doorGlazing", val);
-                }}
-                disabled={isView}
-              />
-              <Text style={styles.toggleText}>Y</Text>
-            </View>
-          </View>
-
-          {/* Pyro Glazing (only when glazing is present) */}
-          {complianceCheck.doorGlazing === true && (
-            <>
-              <View style={styles.complianceItem}>
-                <Text style={styles.label}>Pyro glazing</Text>
-                <View style={styles.switchContainer}>
-                  <Text style={styles.toggleText}>N</Text>
-                  <Switch
-                    value={!!complianceCheck.pyroGlazing}
-                    onValueChange={(val) =>
-                      handleComplianceToggle("pyroGlazing", val)
-                    }
-                    disabled={isView}
-                  />
-                  <Text style={styles.toggleText}>Y</Text>
-                </View>
-              </View>
-              {showComplianceMini("pyroGlazing") && (
-                <MiniCapture
-                  key={`cc-mc-${isView ? "view" : "edit"}-pyroGlazing`}
-                  isView={isView}
-                  fieldValue="pyroGlazing"
-                  formData={complianceCheck}
-                  savedImages={getComplianceImagesFor("pyroGlazing")}
-                  onImagesChange={(images) =>
-                    handleImagesChangeMini(images, "pyroGlazing")
-                  }
-                  onImageDelete={(index) =>
-                    handleDeleteImages(index, "pyroGlazing")
-                  }
-                  onResetChange={() => handleResetAction("pyroGlazing")}
-                  onHandleActionFieldsChange={(val, type) =>
-                    handleComplianceActionFieldsChange("pyroGlazing", type, val)
-                  }
-                  reset={resetCaptureFlag}
-                  mandatoryFieldRef={mandatoryFieldRef}
-                />
-              )}
-            </>
-          )}
-
-          <View className="d-flex gap-3 flex-wrap" style={styles.imageSection}>
+          {/* ------------------ Additional Photos & Comments ------------------ */}
+          <View style={styles.imageSection}>
             <Text style={styles.label}>Additional Photos</Text>
             <Capture
               isView={isView}
@@ -1117,11 +633,10 @@ const FormComponent: React.FC<FormProps> = ({
               onImageDelete={(index) => handleDeleteImages(index, "Additional")}
               mandatoryFieldRef={mandatoryFieldRef}
               fieldValue={"additionalPhotos"}
-              singleImageCapture={false} // Allow multiple images
+              singleImageCapture={false}
             />
           </View>
 
-          {/* Additional Comments */}
           <View
             style={{
               marginBottom: 24,
@@ -1157,59 +672,54 @@ const FormComponent: React.FC<FormProps> = ({
             </View>
           </View>
 
-          {/* Add additional compliance fields similarly */}
-        </View>
-
-        {!isView && (
-          <View>
-            <TouchableOpacity
-              style={[
-                {
-                  backgroundColor: "#ffffff",
-                  marginTop: 10,
-                  marginBottom: 20,
-                  paddingVertical: 14,
-                  borderRadius: 8,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 2,
-                  elevation: 2,
-                  borderWidth: 1,
-                  borderColor: "#000000",
-                },
-              ]}
-              onPress={() => {
-                const ok = validateRequired();
-                if (!ok) {
-                  handleValidationOnSave?.("Invalid");
-                  return;
-                }
-                handleSubmit("Compliant");
+          {!isView && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                padding: 20,
+                marginTop: 20,
               }}
-              disabled={submitting}
             >
-              {submitting ? (
-                <Loader />
-              ) : (
-                <Text
-                  style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}
-                >
-                  Submit
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#ccc",
+                  paddingVertical: 12,
+                  paddingHorizontal: 25,
+                  borderRadius: 8,
+                }}
+                onPress={() => navigation.goBack()}
+              >
+                <Text style={{ color: "#000", fontWeight: "bold" }}>Back</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#034694",
+                  paddingVertical: 12,
+                  paddingHorizontal: 25,
+                  borderRadius: 8,
+                }}
+                onPress={() => {
+                  setSubmitting(true);
+                  handleSubmit("Compliant").finally(() => setSubmitting(false));
+                }}
+                disabled={submitting}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  {submitting ? "Submitting..." : "Submit"}
                 </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={[
             {
-              backgroundColor: "#ffffff", // white background
-              marginTop: 10,
+              backgroundColor: "#ffffff",
+              marginTop: 30,
               marginBottom: 20,
               paddingVertical: 14,
               borderRadius: 8,
@@ -1220,11 +730,10 @@ const FormComponent: React.FC<FormProps> = ({
               shadowOpacity: 0.1,
               shadowRadius: 2,
               elevation: 2,
-              borderWidth: 1, // black border
+              borderWidth: 1,
               borderColor: "#000000",
             },
           ]}
-          // onPress={handleSubmit}
         >
           <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
             Back
@@ -1250,8 +759,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  errorInput: { borderColor: "red", borderWidth: 1 },
-  errorText: { color: "red", marginTop: 4, fontSize: 12 },
   toggleText: {
     fontSize: 16,
     marginHorizontal: 4,
@@ -1267,7 +774,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
   },
-
   imageSection: {
     borderWidth: 1,
     borderColor: "#ccc",
@@ -1291,7 +797,6 @@ const styles = StyleSheet.create({
     color: "#034694",
     fontSize: 16,
   },
-
   card: {
     backgroundColor: "#fff",
     borderRadius: 8,

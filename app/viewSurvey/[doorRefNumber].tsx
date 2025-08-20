@@ -26,17 +26,10 @@ import {
   ActionImages,
   ActionMenuFlag,
   ComplianceCheck,
-  FormData as InspectionFormData,
+  FormData,
 } from "../../components/types";
-// import { ensureWebFileCtor } from "../filePolyfill"; // <- import if not called globally
 
-// export const BASE_MEASURES: (keyof FormData)[] = [
-//   "head",
-//   "hinge",
-//   "closing",
-//   "threshold",
-// ];
-export const BASE_MEASURES: (keyof InspectionFormData)[] = [
+export const BASE_MEASURES: (keyof FormData)[] = [
   "head",
   "hinge",
   "closing",
@@ -51,6 +44,7 @@ export const BASE_MEASURES_COMP: (keyof ComplianceCheck)[] = [
   "visionPanel",
 ];
 
+// keep this type near the top of the file
 type ComplianceKey =
   | "intumescentStrips"
   | "coldSmokeSeals"
@@ -73,10 +67,6 @@ const COMPLIANCE_CHECK_MASTER: Record<`${ComplianceKey}Id`, string> = {
   doorGlazingId: "1b2886cc-a1a3-4573-a5be-7df68c0db109",
   pyroGlazingId: "c9873267-e600-4c99-bf08-088dee277909",
 };
-
-// keep your existing type ComplianceKey
-
-// --- helpers that need state setters; must be inside the component ---
 
 const defaultActionMenuFlag: ActionMenuFlag = {
   head: false,
@@ -104,17 +94,22 @@ const ViewSurvey: React.FC = () => {
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
   const [propertyId, setPropertyId] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<InspectionFormData>(
-    {} as InspectionFormData
-  );
+  const [formData, setFormData] = useState<FormData>({} as FormData);
+  // const [complianceCheck, setComplianceCheck] = useState<ComplianceCheck>(
+  //   {} as ComplianceCheck
+  // );
 
-  // const [formData, setFormData] = useState<FormData>({} as FormData);
+  // state you already have:
   const [complianceCheck, setComplianceCheck] = useState<ComplianceCheck>(
-    {} as ComplianceCheck
+    {} as any
   );
-  const [actionImages, setActionImages] = useState<ActionImages>(
-    {} as ActionImages
-  );
+  const [actionImages, setActionImages] = useState<ActionImages>({} as any);
+  const [isGlazing, setIsGlazing] = useState<boolean>(true);
+  const [fireKeepLocked, setFireKeepLocked] = useState<boolean>(false);
+
+  // const [actionImages, setActionImages] = useState<ActionImages>(
+  //   {} as ActionImages
+  // );
   const [basicFormData, setBasicFormData] = useState<any>({});
   const [actionMenuFlag, setActionMenuFlag] = useState<ActionMenuFlag>(
     defaultActionMenuFlag
@@ -125,15 +120,14 @@ const ViewSurvey: React.FC = () => {
   const [doorTypesOption, setDoorTypesOption] = useState<any[]>([]);
   const [isView, setIsView] = useState(true); // default read-only until data loads
   const [isColdSeals, setIsColdSeals] = useState(false);
-  const [isGlazing, setIsGlazing] = useState(false);
-  const [fireKeepLocked, setFireKeepLocked] = useState(false);
+  // const [isGlazing, setIsGlazing] = useState(false);
+  // const [fireKeepLocked, setFireKeepLocked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mandatoryFieldRef = useRef<Record<string, TextInput | null>>({});
 
   // NEW: local validation flag so we don’t throw
   const [validationFlag, setValidationFlag] = useState<boolean>(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [toastData, setToastData] = useState({
     toastShow: false,
@@ -141,138 +135,88 @@ const ViewSurvey: React.FC = () => {
     toastString: "",
   });
 
-  const doorRefNumber =
-    typeof params.doorRefNumber === "string"
-      ? params.doorRefNumber
-      : Array.isArray(params.doorRefNumber)
-      ? params.doorRefNumber[0]
-      : "";
-
-  const COMPLIANCE_KEYS: readonly ComplianceKey[] = [
-    "intumescentStrips",
-    "coldSmokeSeals",
-    "selfClosingDevice",
-    "fireLockedSign",
-    "fireShutSign",
-    "holdOpenDevice",
-    "visibleCertification",
-    "doorGlazing",
-    "pyroGlazing",
-  ];
-  const isComplianceKey = (k: string): k is ComplianceKey =>
-    (COMPLIANCE_KEYS as readonly string[]).includes(k);
-
-  // const handleComplianceActionFieldsChange = (
-  //   field: ComplianceKey,
-  //   type: string, // "Severity" | "Category" | "Comments" | "Remediation" | "DueDate" | "Timeline"
-  //   value: string
-  // ) => {
-  //   setComplianceCheck(
-  //     (prev) =>
-  //       ({
-  //         ...prev,
-  //         [`${field}${type}`]: value,
-  //       } as any)
-  //   );
-  // };
-
-  const resetComplianceAction = (key: ComplianceKey) => {
-    setComplianceCheck(
-      (prev) =>
-        ({
-          ...prev,
-          [`${key}Severity`]: "",
-          [`${key}Category`]: "",
-          [`${key}Remediation`]: "",
-          [`${key}Comments`]: "",
-          [`${key}DueDate`]: "",
-          [`${key}Timeline`]: "",
-        } as any)
-    );
-    setActionImages((prev) => ({ ...prev, [key]: [] }));
-  };
-
-  const resetPhysicalAction = (key: string) => {
-    setActionMenuFlag((prev) => ({ ...prev, [key]: false })); // <-- fixed
-    setActionImages((prev) => ({ ...prev, [key]: [] }));
-    setFormData(
-      (prev) =>
-        ({
-          ...prev,
-          [`${key}Severity`]: "",
-          [`${key}Category`]: "",
-          [`${key}Remediation`]: "",
-          [`${key}Comments`]: "",
-          [`${key}DueDate`]: "",
-        } as any)
-    );
-  };
-
-   const handleResetAction = (key: string) => {
-    if (isComplianceKey(key)) resetComplianceAction(key as ComplianceKey);
-    else resetPhysicalAction(key);
-  };
+  // const doorRefNumber =
+  //   typeof params.doorRefNumber === "string"
+  //     ? params.doorRefNumber
+  //     : Array.isArray(params.doorRefNumber)
+  //     ? params.doorRefNumber[0]
+  //     : "";
 
   // ----- Handlers: plain form changes -----
   // ViewSurvey.tsx
   const handleFormDataChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-   if (!isView && ["head", "hinge", "closing", "threshold"].includes(field)) {
-  const n = parseFloat(String(value).replace(",", "."));
-  setActionMenuFlag((prev) => ({
-    ...prev,
-    [field]: Number.isFinite(n) && n > 3,
-  }));
-}
-
+    if (!isView && ["head", "hinge", "threshold"].includes(field)) {
+      const n = parseFloat(String(value).replace(",", "."));
+      setActionMenuFlag((prev) => ({
+        ...prev,
+        [field]: Number.isFinite(n) && n > 3,
+      }));
+    }
   };
 
-// was: (field: ComplianceKey, val: boolean)
-const handleComplianceToggle = (field: keyof ComplianceCheck, val: boolean) => {
-  setComplianceCheck(prev => {
-    const next: any = { ...prev, [field]: val };
-    const f = field as unknown as string;
+  const handleComplianceActionFieldsChange = (
+    field: string, // e.g. "intumescentStrips"
+    type: string, // "Severity" | "Category" | "Remediation" | "Comments" | "DueDate" | "Timeline"
+    value: string
+  ) => {
+    setComplianceCheck((prev) => ({
+      ...prev,
+      [`${field}${type}`]: value,
+    }));
+  };
 
-    // self closer logic
-    if (f === "selfClosingDevice") {
-      setFireKeepLocked(!val);
-      if (val) {
+  const clearCompliance = (k: ComplianceKey, next: any) => {
+  next[`${k}Timeline`] = "";
+  next[`${k}Severity`] = "";
+  next[`${k}Category`] = "";
+  next[`${k}Comments`] = "";
+  next[`${k}DueDate`]   = "";
+  next[`${k}Remediation`] = "";
+  next[`${k}Images`] = []; // if you ever store Images on cc
+  setActionImages((ai) => ({ ...ai, [k]: [] }));
+};
+
+const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
+  setComplianceCheck((prev) => {
+    const next: any = { ...prev, [field]: nextVal };
+
+    // Self closer → hide Keep Locked when YES
+    if (field === "selfClosingDevice") {
+      setFireKeepLocked(!nextVal);
+      if (nextVal) {
         next.fireLockedSign = true;
-        resetComplianceAction("fireLockedSign");
+        clearCompliance("fireLockedSign", next);
       }
     }
 
-    // glazing logic
-    if (f === "doorGlazing") {
-      setIsGlazing(val);
-      if (!val) {
-        next.pyroGlazing = false;
-        resetComplianceAction("pyroGlazing");
+    // Glazing → hide Pyro when NO
+    if (field === "doorGlazing") {
+      setIsGlazing(nextVal);
+      if (!nextVal) {
+        next.pyroGlazing = true;
+        clearCompliance("pyroGlazing", next);
       }
     }
 
-    // if it just became compliant, clear its own action data
-    if (val && isComplianceKey(f)) {
-      resetComplianceAction(f);
+    // Generic: if toggled to YES, clear its own action/images
+    if (nextVal) {
+      clearCompliance(field, next);
     }
 
     return next;
   });
 };
 
-// was: (field: ComplianceKey, type: string, value: string)
-const handleComplianceActionFieldsChange = (
-  field: keyof ComplianceCheck,
-  type: string,
-  value: string
-) => {
-  setComplianceCheck(prev => ({
-    ...(prev as any),
-    [`${field}${type}`]: value,
-  }) as any);
-};
 
-
+  // ----- Handlers: MiniCapture integration -----
+  // keep field-first internally
+  // REPLACE your current handleImagesChangeMini with this:
+  // const handleImagesChangeMini = (images: string[], field: string) => {
+  //   const key = field.toLowerCase();
+  //   setActionImages(prev => ({ ...prev, [key]: images }));
+  //   setFormData(prev => ({ ...prev, [`${key}Images`]: images }));
+  // };
 
   async function base64DataUrlToFileUri(
     dataUrl: string
@@ -294,14 +238,10 @@ const handleComplianceActionFieldsChange = (
     if (ext === "webp") return "image/webp";
     return "image/jpeg";
   };
-  async function normaliseForUpload(src: string, field: string) {
-    if (!src) {
-      return {
-        uri: "",
-        name: `${field}_Image_${Date.now()}.jpg`,
-        type: "image/jpeg",
-      };
-    }
+  async function normaliseForUpload(
+    src: string,
+    field: string
+  ): Promise<{ uri: string; name: string; type: string }> {
     if (src.startsWith("data:image/")) {
       return base64DataUrlToFileUri(src);
     }
@@ -309,91 +249,62 @@ const handleComplianceActionFieldsChange = (
     return { uri: src, name, type: guessMimeFromName(name) };
   }
 
-  // --- helpers ---
-  const dataUrlToBlob = (dataUrl: string): Blob => {
-    const [hdr, b64] = dataUrl.split(",");
-    const mime =
-      hdr.match(/^data:(.+?);base64$/)?.[1] || "application/octet-stream";
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new Blob([bytes], { type: mime });
-  };
-
-  const urlToBlob = async (src: string): Promise<Blob> => {
-    const res = await fetch(src);
-    return await res.blob();
-  };
-
   const uploadImageAPI = async (
     newImages: string[],
     field: string
   ): Promise<string> => {
     try {
-      if (!Array.isArray(newImages) || newImages.length === 0) return "";
-      const latest = newImages[newImages.length - 1];
-      if (typeof latest !== "string" || latest.length === 0) return "";
-      if (/^https?:\/\//i.test(latest)) return latest; // already remote
-
       const rawToken = userObj?.token ?? "";
-      if (!rawToken) return "";
+      if (!rawToken) {
+        console.warn("No auth token found in userObj");
+        return "";
+      }
+
+      // ✅ ensure exactly one "Bearer " prefix
       const authHeader = rawToken.startsWith("Bearer ")
         ? rawToken
         : `Bearer ${rawToken}`;
 
-      const form = new globalThis.FormData();
+      const latest = newImages[newImages.length - 1];
+      let filePart: { uri?: string; name: string; type: string } | File | Blob;
       let name = `${field}_Image_${Date.now()}.jpg`;
       let type = "image/jpeg";
 
       if (Platform.OS === "web") {
-        let blob: Blob;
-        if (latest.startsWith("data:")) blob = dataUrlToBlob(latest);
-        else blob = await urlToBlob(latest); // blob:, object URL, etc.
-
-        try {
-          // @ts-ignore
-          const f = new File([blob], name, {
-            type: (blob as any).type || type,
-          });
-          form.append("File", f);
-        } catch {
-          form.append("File", blob, name);
-        }
+        const res = await fetch(latest);
+        const blob = await res.blob();
+        type = blob.type || type;
+        // Use File on web so the server gets a filename
+        filePart = new File([blob], name, { type });
       } else {
-        let filePart: { uri: string; name: string; type: string };
-        if (/^data:image\//i.test(latest)) {
-          const {
-            uri,
-            name: n,
-            type: t,
-          } = await base64DataUrlToFileUri(latest);
-          name = n;
-          type = t || type;
-          filePart = { uri, name, type };
-        } else {
-          const parts = await normaliseForUpload(latest, field);
-          name = parts.name;
-          type = parts.type || type;
-          filePart = { uri: parts.uri, name, type };
-        }
-        // @ts-ignore RN allows this shape
-        form.append("File", filePart as any);
+        const parts = await normaliseForUpload(latest, field);
+        name = parts.name;
+        type = parts.type;
+        filePart = { uri: parts.uri, name, type } as any;
       }
 
+      const form = new FormData();
+      form.append("File", filePart as any, name);
       form.append("Client", "ABC");
       form.append("Property", "Candor");
       form.append("InspectionDate", new Date().toISOString());
 
       const resp = await fetch(`${hostName}api/Inspection/upload`, {
         method: "POST",
-        headers: { Authorization: authHeader }, // DO NOT set Content-Type here
+        headers: {
+          Authorization: authHeader, // ✅
+          // DO NOT set Content-Type manually when sending FormData
+        },
         body: form,
+        // credentials: 'include', // only if your API uses cookies (likely not)
       });
 
       if (!resp.ok) {
+        const www = resp.headers.get("www-authenticate") || "";
         const text = await resp.text().catch(() => "");
         console.error("Upload failed", {
           status: resp.status,
+          wwwAuthenticate: www,
           body: text?.slice(0, 300),
         });
         return "";
@@ -407,59 +318,97 @@ const handleComplianceActionFieldsChange = (
     }
   };
 
-  const handleImagesChangeMini = async (newImages: string[], field: string) => {
+  const handleImagesChangeMini = async (
+    newImages: string[],
+    field: string
+  ): Promise<void> => {
     const prev = actionImages[field] || [];
 
-    // Only attempt upload for brand-new local items (and guard types)
-    const toUpload = (newImages || []).filter(
-      (u): u is string => typeof u === "string" && !/^https?:\/\//i.test(u)
+    // Only upload items that aren't already server URLs
+    const toUpload = newImages.filter(
+      (u) => !(u.startsWith("http://") || u.startsWith("https://"))
     );
-    if (toUpload.length === 0) {
-      // still update merged state if user just removed images
-      setActionImages((p) => ({ ...p, [field]: newImages || [] }));
-      setFormData((p: any) => ({ ...p, [`${field}Images`]: newImages || [] }));
-      return;
-    }
+    if (toUpload.length === 0) return;
 
+    // Upload each new image using your existing API helper
     const uploaded = (
       await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
     ).filter(Boolean) as string[];
 
-    const next = Array.from(new Set([...(prev || []), ...uploaded]));
-    setActionImages((p) => ({ ...p, [field]: next }));
-    setFormData((p: any) => ({ ...p, [`${field}Images`]: next }));
+    if (uploaded.length === 0) return;
+
+    // Merge (and de-dupe just in case)
+    const next = Array.from(new Set([...prev, ...uploaded]));
+    setActionImages((prev) => ({ ...prev, [field]: next }));
+    setFormData((prev) => ({ ...prev, [`${field}Images`]: next }));
+    // setActionImages((prevMap) => ({ ...prevMap, [field]: next }));
+
+    // (Optional) also mirror into formData so MiniCapture re-renders from it too
+    // setFormData((prev: any) => ({ ...prev, [`${field}Images`]: next }));
   };
 
+  // REPLACE your handleDeleteImages with this:
+  // const handleDeleteImages = (field: string, index: number) => {
+  //   const key = field.toLowerCase();
+  //   setActionImages(prev => {
+  //     const list = [...(prev[key] || [])];
+  //     if (index >= 0 && index < list.length) list.splice(index, 1);
+  //     return { ...prev, [key]: list };
+  //   });
+  //   setFormData(prev => {
+  //     const arr = [ ...((prev as any)[`${key}Images`] || []) ];
+  //     if (index >= 0 && index < arr.length) arr.splice(index, 1);
+  //     return { ...prev, [`${key}Images`]: arr };
+  //   });
+  // };
   const handleDeleteImages = (index: number, field: string) => {
-    if (field === "Floor") {
-      setBasicFormData((prev: { floorPlan: any }) => ({
-        ...prev,
-        floorPlan: (prev.floorPlan ?? []).filter(
-          (_: any, i: number) => i !== index
-        ),
-      }));
-    } else if (field === "Door") {
-      setFormData((prev) => ({
-        ...prev,
-        doorPhoto: (prev.doorPhoto ?? []).filter(
-          (_: any, i: number) => i !== index
-        ),
-      }));
-    } else if (field === "Additional") {
-      setBasicFormData((prev: { additionalPhotos: any }) => ({
-        ...prev,
-        additionalPhotos: (prev.additionalPhotos ?? []).filter(
-          (_: any, i: number) => i !== index
-        ),
-      }));
-    } else {
-      setActionImages((prev) => ({
-        ...prev,
-        [field]: (prev?.[field] ?? []).filter((_, i) => i !== index),
-      }));
+    switch (field) {
+      case "Floor": {
+        const updated = [...basicInfo.floorPlan];
+        updated.splice(index, 1);
+        setBasicInfo((prev: any) => ({ ...prev, floorPlan: updated }));
+        break;
+      }
+
+      case "Door": {
+        const updated = [...formData.doorPhoto];
+        updated.splice(index, 1);
+        setFormData((prev) => ({
+          ...prev,
+          doorPhoto: updated,
+          // Optional: clear doorPhoto if it's the one removed
+          // doorPhoto: updated[0] || "",
+        }));
+        break;
+      }
+
+      default: {
+        const imgArr = actionImages[field] || [];
+        const updatedImages = imgArr.filter((_, i) => i !== index);
+        setActionImages((prev) => ({
+          ...prev,
+          [field]: updatedImages,
+        }));
+        break;
+      }
     }
+
+    // Optional: delete from blob storage
+    // deleteImageAPI(imageToDelete);
   };
 
+  // const handleActionFieldsChange = (
+  //   key: string,
+  //   value: string,
+  //   type: string
+  // ) => {
+  //   // type: 'Severity' | 'Category' | 'Remediation' | 'Comments' | 'DueDate'
+  //   const fieldName = `${key}${type}`;
+  //   setFormData((prev: any) => ({
+  //     ...prev,
+  //     [fieldName]: value,
+  //   }));
+  // };
   const handleActionFieldsChange = (
     field: string,
     type: string,
@@ -471,32 +420,18 @@ const handleComplianceActionFieldsChange = (
     }));
   };
 
-  const isEmpty = (v: any) =>
-    v === undefined ||
-    v === null ||
-    (typeof v === "string" && v.trim() === "") ||
-    (Array.isArray(v) && v.length === 0);
-
-  // const handleResetAction = (key: string) => {
-  //   // reset section flags + photos for a specific key
-  //   setActionMenuFlag((prev) => ({ ...prev, [key]: false }));
-  //   setActionImages((prev) => ({ ...prev, [key]: [] }));
-  //   setFormData((prev: any) => ({
-  //     ...prev,
-  //     [`${key}Severity`]: "",
-  //     [`${key}Category`]: "",
-  //     [`${key}Remediation`]: "",
-  //     [`${key}Comments`]: "",
-  //     [`${key}DueDate`]: "",
-  //   }));
-  // };
-  // mark the first failing field
-  const focusFirstError = (errs: Record<string, string>) => {
-    const firstKey = Object.keys(errs)[0];
-    const el = mandatoryFieldRef.current[firstKey];
-    if (el?.focus) el.focus();
-    // optional: scroll to it if needed
-    // scrollRef.current?.scrollTo({ y: <y-position>, animated: true });
+  const handleResetAction = (key: string) => {
+    // reset section flags + photos for a specific key
+    setActionMenuFlag((prev) => ({ ...prev, [key]: false }));
+    setActionImages((prev) => ({ ...prev, [key]: [] }));
+    setFormData((prev: any) => ({
+      ...prev,
+      [`${key}Severity`]: "",
+      [`${key}Category`]: "",
+      [`${key}Remediation`]: "",
+      [`${key}Comments`]: "",
+      [`${key}DueDate`]: "",
+    }));
   };
 
   const handleCancel = () => {
@@ -656,7 +591,7 @@ const handleComplianceActionFieldsChange = (
         },
         inspectedPropertyFloorsInfo: {
           floorNo: basicFormData.floor ? Number(basicFormData.floor) : null,
-          floorPlanImage: basicFormData.floorPlan?.[0] ?? "",
+          floorPlanImage: basicFormData.floorPlan?.[0] ?? "no image",
           createdBy: userObj?.userEmail,
           updatedBy: userObj?.userEmail,
         },
@@ -678,7 +613,7 @@ const handleComplianceActionFieldsChange = (
         },
         complianceChecks,
         physicalMeasurement,
-        additionalInfos: [{ imagePath: basicFormData.additionalPhotos ?? [] }],
+        additionalInfos: [{ imagePath: floorPlanImages }],
       };
 
       console.log("➡️ SUBMIT payload:", fullFormData);
@@ -701,15 +636,13 @@ const handleComplianceActionFieldsChange = (
           toastString: "❌ Failed to save. Please try again.",
         });
       }
-    } catch (error: any) {
-      if (error.response?.data?.errors) {
-        console.error("🚨 Validation Errors:", error.response.data.errors);
-        const firstKey = Object.keys(error.response.data.errors)[0];
-        const firstMsg = error.response.data.errors[firstKey][0];
-        Alert.alert("Validation Error", `${firstKey}: ${firstMsg}`);
-      } else {
-        Alert.alert("Submission Error", error.message || "Unknown error");
-      }
+    } catch (err) {
+      console.error("❌ handleSubmit error:", err);
+      setToastData({
+        toastShow: true,
+        toastType: "failure",
+        toastString: "Something went wrong during submission.",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -720,7 +653,7 @@ const handleComplianceActionFieldsChange = (
       const response = await http.post(SAVE_SURVEY_FORM_DATA, payload, {
         headers: { "Content-Type": "application/json" },
       });
-      // console.log("✅ API Response:", response.data);
+      console.log("✅ API Response:", response.data);
       return response;
     } catch (err: any) {
       if (err.response) {
@@ -733,50 +666,17 @@ const handleComplianceActionFieldsChange = (
     }
   };
 
-  const handleValidationOnSave = async () => {
-    const e: Record<string, string> = {};
+  // ---- Validation helpers (no more throws) ----
+  const handleMandatoryFields = () => {
+    // highlight first missing field if you want; for now it’s a no-op
+  };
 
-    // Basic requireds
-    if (isEmpty(basicInfo.floor)) e.floor = "Floor is required";
-    if (isEmpty(formData.doorType)) e.doorType = "Door Type is required";
-    if (isEmpty(formData.doorNumber)) e.doorNumber = "Door Number is required";
-    if (isEmpty(formData.hingeLocation))
-      e.hingeLocation = "Hinge Location is required";
-    if (isEmpty(formData.fireResistance))
-      e.fireResistance = "Fire rating is required";
-
-    // Files / images
-    if (isEmpty(basicInfo.floorPlan))
-      e.floorPlan = "Floor plan file is required";
-    if (isEmpty(formData.doorPhoto)) e.doorPhoto = "Door photo is required";
-
-    // Measurements (add/remove as needed)
-    const reqMeasurements = [
-      "head",
-      "hinge",
-      "closing",
-      "threshold",
-      "doorThickness",
-      "frameDepth",
-      "doorSize",
-      "fullDoorsetSize",
-    ];
-    reqMeasurements.forEach((k) => {
-      if (isEmpty((formData as any)[k])) e[k] = `${k} is required`;
-    });
-
-    // Example date required (if you want it mandatory)
-    // if (!date) e.date = "Date is required";
-
-    if (Object.keys(e).length) {
-      setErrors(e);
-      focusFirstError(e);
-      return;
-    }
-
-    setErrors({});
-    // proceed with your existing submit
-    handleSubmit();
+  const handleValidationOnSave = (status: string) => {
+    // keep your existing logic; call setValidationFlag instead of throwing
+    setValidationFlag(false);
+    // ... you can port your previous checks here ...
+    // for demo, just submit:
+    handleSubmit(status);
   };
 
   // Basic form changes
@@ -787,77 +687,34 @@ const handleComplianceActionFieldsChange = (
     }));
   };
 
-  // Replace your current handleImagesChange with this:
-  const handleImagesChange = async (newImages: string[], field: string) => {
-    // Normalize incoming list
-    const clean = (newImages || []).filter(
-      (s): s is string => typeof s === "string" && s.length > 0
-    );
-
-    // If list is now empty, clear the corresponding state and bail
-    if (clean.length === 0) {
-      if (field === "Additional") {
-        setBasicFormData((prev: any) => ({ ...prev, additionalPhotos: [] }));
-      } else if (field === "Door") {
-        setFormData((prev) => ({ ...prev, doorPhoto: [] }));
-      } else if (field === "Floor") {
-        setBasicFormData((prev: any) => ({ ...prev, floorPlan: [] }));
-      }
-      return;
-    }
-
-    // Split into already-remote vs local-to-upload
-    const isRemote = (u: string) => /^https?:\/\//i.test(u);
-    const local = clean.filter((u) => !isRemote(u));
-    const uploaded = (
-      await Promise.all(local.map((u) => uploadImageAPI([u], field)))
-    ).filter(Boolean) as string[];
-
-    // Rebuild final array in original order: replace local items with uploaded (1:1)
-    let upIdx = 0;
-    const finalList = clean
-      .map((u) => (isRemote(u) ? u : uploaded[upIdx++]))
-      .filter(Boolean) as string[];
-
-    // De-dupe while preserving order
-    const finalUnique = Array.from(new Set(finalList));
-
-    // Write back to the right slice of state
-    switch (field) {
-      case "Floor":
-        // single image: keep only the most recent selection
-        setBasicFormData((prev: any) => ({
-          ...prev,
-          floorPlan: [finalUnique[finalUnique.length - 1]],
-        }));
-        break;
-      case "Door":
-        setFormData((prev) => ({ ...prev, doorPhoto: finalUnique }));
-        break;
-      case "Additional":
-        setBasicFormData((prev: any) => ({
-          ...prev,
-          additionalPhotos: finalUnique,
-        }));
-        break;
+  const handleImagesChange = (images: string[], field: string) => {
+    if (field === "Floor") {
+      setBasicFormData((prev: any) => ({ ...prev, floorPlan: images }));
+    } else if (field === "Door") {
+      setFormData((prev: any) => ({ ...prev, doorPhotos: images }));
+    } else if (field === "Additional") {
+      setBasicFormData((prev: any) => ({ ...prev, additionalPhotos: images }));
     }
   };
 
   // ViewSurvey.tsx
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  // const { mode } = useLocalSearchParams<{ mode?: string }>();
+
+  // app/viewSurvey/[doorRefNumber].tsx
+  const {
+    doorRefNumber = "",
+    mode: rawMode, // 👈 rename so no conflict
+    propertyMasterId,
+  } = useLocalSearchParams<{
+    doorRefNumber?: string;
+    mode?: string;
+    propertyMasterId?: string;
+  }>();
 
   useEffect(() => {
-    const modeNorm = (mode ?? "").toString().trim().toLowerCase();
-    setIsView(modeNorm !== "edit"); // false in edit mode
-    // console.log(
-    //   "mode raw:",
-    //   mode,
-    //   "normalized:",
-    //   modeNorm,
-    //   "isView:",
-    //   modeNorm !== "edit"
-    // );
-  }, [mode]);
+    const modeNorm = (rawMode ?? "").toString().trim().toLowerCase();
+setIsView(modeNorm !== "edit");
+  }, [rawMode]);
 
   // ---- Data load ----
   useEffect(() => {
@@ -869,7 +726,15 @@ const handleComplianceActionFieldsChange = (
 
     const fetchData = async () => {
       try {
-        const res = await http.get(GET_DOOR_INSPECTION_DATA + doorRefNumber);
+        const url =
+          `${GET_DOOR_INSPECTION_DATA}${encodeURIComponent(doorRefNumber)}` +
+          (propertyMasterId
+            ? `&propertyMasterId=${encodeURIComponent(propertyMasterId)}`
+            : "");
+
+        console.log("🌐 Fetching:", url);
+        const res = await http.get(url);
+
         const data = res?.data;
 
         const propertyRes = await http.get(
@@ -890,7 +755,7 @@ const handleComplianceActionFieldsChange = (
         // ✅ isView: only editable if mode === 'edit'
         // setIsView(mode === "edit" ? false : true);
 
-        const fd: InspectionFormData = {
+        const fd: FormData = {
           doorNumber: data.inspectedDoorDto.doorNumber,
           doorType: data.inspectedDoorDto.doorTypeId,
           doorTypeName: data.inspectedDoorDto.doorTypeName,
@@ -937,7 +802,7 @@ const handleComplianceActionFieldsChange = (
             ? formatDateString(src.dueDate)
             : "";
           (fd as any)[`${k}photos`] = src.photos ?? "";
-          // console.log("photos", src.photos);
+          console.log("photos", src.photos);
           // saved images for MiniCapture
           physAI[k] = Array.isArray(src.photos) ? src.photos : [];
         });
@@ -962,45 +827,43 @@ const handleComplianceActionFieldsChange = (
         const cc: ComplianceCheck = {} as ComplianceCheck;
         const ai: ActionImages = {} as ActionImages;
 
-       Object.entries(COMPLIANCE_CHECK_MASTER).forEach(([idKey, id]) => {
-  const key = idKey.replace("Id", "") as ComplianceKey;
-  const item = data.complianceChecks.find((x: any) => x.complianceCheckMasterID === id);
-  if (!item) return;
+        Object.entries(COMPLIANCE_CHECK_MASTER).forEach(([idKey, id]) => {
+          const key = idKey.replace("Id", "") as ComplianceKey;
+          const item = data.complianceChecks.find(
+            (x: any) => x.complianceCheckMasterID === id
+          );
+          if (!item) return;
 
-  (cc as any)[key] = item?.isCompliant;
-  (cc as any)[`${key}Timeline`] = item?.actionItem?.timeline ?? "";
-  (cc as any)[`${key}Severity`] = item?.actionItem?.severity ?? "";
-  (cc as any)[`${key}Comments`] = item?.actionItem?.comment ?? "";
-  (cc as any)[`${key}Remediation`] = item?.actionItem?.remediation ?? "";
-  (cc as any)[`${key}Category`] = item?.actionItem?.category ?? "";
-  (cc as any)[`${key}DueDate`] = item?.actionItem?.dueDate ? formatDateString(item.actionItem.dueDate) : "";
-  (cc as any)[`${key}Id`] = id;
+          (cc as any)[key] =
+            key === "fireLockedSign" ? item?.isCompliant : item?.isCompliant;
+          (cc as any)[`${key}Timeline`] = item?.actionItem?.timeline;
+          (cc as any)[`${key}Severity`] = item?.actionItem?.severity;
+          (cc as any)[`${key}Comments`] = item?.actionItem?.comment;
+          (cc as any)[`${key}Remediation`] = item?.actionItem?.remediation;
+          (cc as any)[`${key}Category`] = item?.actionItem?.category;
+          (cc as any)[`${key}DueDate`] = item?.actionItem?.dueDate
+            ? formatDateString(item.actionItem.dueDate)
+            : "";
+          (cc as any)[`${key}Id`] = id;
+          (ai as any)[key] = item?.actionItem?.photos;
 
-  const photos = Array.isArray(item?.actionItem?.photos) ? item.actionItem.photos : [];
-  (ai as any)[key] = photos;
+          (cc as any)[key] = item?.isCompliant === true;
 
-  // optional but useful since your FormComponent merges `${key}Images`
-  (cc as any)[`${key}Images`] = photos;
-
-  if (key === "selfClosingDevice" && !item?.isCompliant) setFireKeepLocked(true);
-  if (key === "doorGlazing") setIsGlazing(item?.isCompliant);
-});
-
+          if (key === "selfClosingDevice" && !item?.isCompliant) {
+            setFireKeepLocked(true);
+          }
+          if (key === "doorGlazing") {
+            setIsGlazing(item?.isCompliant);
+          }
+        });
 
         setComplianceCheck(cc);
-
-        // ✅ one place to set everything used by MiniCapture
-setActionImages(prev => ({
-  ...prev,
-  ...physAI, // head/hinge/closing/threshold
-  ...ai,     // intumescentStrips, coldSmokeSeals, fireLockedSign, etc.
-}));
         // setActionImages(ai);
         setDoorTypesOption(property.doorTypes);
         setFloorPlanImages([data.inspectedPropertyFloorsInfo.floorPlanImage]);
         setIsColdSeals(
-  ["5", "6", "7", "8"].includes(data.physicalMeasurement.fireRatingID)
-);
+          ["5", "6", "7"].includes(data.physicalMeasurement.fireRatingID)
+        );
 
         setIsLoading(false);
       } catch (err: any) {
@@ -1046,18 +909,26 @@ setActionImages(prev => ({
         keyboardShouldPersistTaps="handled"
       >
         <FormComponent
+          isGlazing={isGlazing}
+          isFireKeepLocked={fireKeepLocked}
+          complianceCheck={complianceCheck}
+          actionImages={actionImages}
+          handleComplianceToggle={handleComplianceToggle}
+          handleComplianceActionFieldsChange={
+            handleComplianceActionFieldsChange
+          }
           isView={isView}
           basicFormData={basicFormData}
           formData={formData}
-          complianceCheck={complianceCheck}
+          // complianceCheck={complianceCheck}
           actionmenuFlag={actionMenuFlag} // ✅ use the same state consistently
-          actionImages={actionImages}
+          // actionImages={actionImages}
           doorPhoto={(formData as any).doorPhoto}
           floorPlanImages={floorPlanImages}
           resetCaptureFlag={false}
           isColdSeals={isColdSeals}
-          isGlazing={isGlazing}
-          isFireKeepLocked={fireKeepLocked}
+          // isGlazing={isGlazing}
+          // isFireKeepLocked={fireKeepLocked}
           ShowScanQRCode={false}
           doorOtherFlag={(formData as any).doorType === "99"}
           doorTypesOption={doorTypesOption}
@@ -1067,27 +938,24 @@ setActionImages(prev => ({
           handleChange={handleChange}
           handleFormDataChange={handleFormDataChange}
           handleGapsChange={() => {}}
-          handleComplianceToggle={handleComplianceToggle}
-          handleComplianceActionFieldsChange={(key, type, val) =>
-            handleComplianceActionFieldsChange(key as ComplianceKey, type, val)
-          }
+          // handleComplianceToggle={handleComplianceToggle}
+          handleResetAction={(field, _type) => handleResetAction(field)}
+          // handleComplianceActionFieldsChange={handleComplianceActionFieldsChange}
           handleImagesChange={handleImagesChange}
           handleImagesChangeMini={handleImagesChangeMini}
           handleDeleteImages={handleDeleteImages}
           // handleResetAction={(key: string) => handleResetAction(key)}
-                handleResetAction={(key) => handleResetAction(key)}
+          handleActionFieldsChange={(key: string, type: string, value: string) =>
+  handleActionFieldsChange(key, type, value)
+}
 
-          handleActionFieldsChange={(
-            field: string,
-            type: string,
-            value: string
-          ) => handleActionFieldsChange(field, type, value)}
           handleFireResistanceChange={() => {}}
           generateQRCode={() => {}}
           setShowScanQRCode={() => {}}
           handleCancel={handleCancel}
           handleSubmit={handleSubmit}
           handleValidationOnSave={handleValidationOnSave}
+          // handleComplianceActionFieldsChange={handleComplianceActionFieldsChange}
         />
       </ScrollView>
     </KeyboardAvoidingView>

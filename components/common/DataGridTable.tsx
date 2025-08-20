@@ -21,17 +21,25 @@ interface TableRowData {
   compliance: string;
   comments?: string;
   id: number;
+  propertyMasterId?: string;
 }
 
 interface DataGridTableProps {
   tableData: TableRowData[];
   userRole: number | null;
   inspectorInspectionStatus: string | null;
-  propertyInfo: { status: string } | null;
-  initialPageSize?: number; // default 5
+  propertyInfo: {
+    status: string;
+  };
+  initialPageSize?: number;
 }
 
-type ColKey = "doorRefNumber" | "doorType" | "fireRating" | "compliance" | "comments";
+type ColKey =
+  | "doorRefNumber"
+  | "doorType"
+  | "fireRating"
+  | "compliance"
+  | "comments";
 interface ColumnDef {
   key: ColKey;
   label: string;
@@ -64,13 +72,13 @@ export default function DataGridTable({
 
   // ----- columns (fixed widths) -----
   const [columns, setColumns] = useState<ColumnDef[]>([
-    { key: "doorRefNumber", label: "Door Ref",   visible: true, width: 160 },
-    { key: "doorType",      label: "Type",       visible: true, width: 120 },
-    { key: "fireRating",    label: "Fire",       visible: true, width: 100 },
-    { key: "compliance",    label: "Compliance", visible: true, width: 140 },
-    { key: "comments",      label: "Comments",   visible: true, width: 220 },
+    { key: "doorRefNumber", label: "Door Ref", visible: true, width: 160 },
+    { key: "doorType", label: "Type", visible: true, width: 120 },
+    { key: "fireRating", label: "Fire", visible: true, width: 100 },
+    { key: "compliance", label: "Compliance", visible: true, width: 140 },
+    { key: "comments", label: "Comments", visible: true, width: 220 },
   ]);
-  const visibleColumns = columns.filter(c => c.visible);
+  const visibleColumns = columns.filter((c) => c.visible);
 
   // ----- actions visibility -----
   const [showView, setShowView] = useState(true);
@@ -122,19 +130,41 @@ export default function DataGridTable({
   const [pageSize, setPageSize] = useState<number>(initialPageSize);
   const [page, setPage] = useState<number>(0);
 
-  useEffect(() => setPage(0), [debouncedSearch, searchIn, pageSize, sortBy, sortDir, columns, showView, showEdit, deleteMode]);
+  useEffect(
+    () => setPage(0),
+    [
+      debouncedSearch,
+      searchIn,
+      pageSize,
+      sortBy,
+      sortDir,
+      columns,
+      showView,
+      showEdit,
+      deleteMode,
+    ]
+  );
 
   // ----- filter -> sort -> page -----
   const filtered = useMemo(() => {
     if (!debouncedSearch) return rows;
     const q = debouncedSearch.toLowerCase();
     const match = (r: TableRowData, key: ColKey) =>
-      (String((r as any)[key] ?? "")).toLowerCase().includes(q);
+      String((r as any)[key] ?? "")
+        .toLowerCase()
+        .includes(q);
 
     if (searchIn === "all") {
       return rows.filter((r) =>
-        (["doorRefNumber", "doorType", "fireRating", "compliance", "comments"] as ColKey[])
-          .some((k) => match(r, k))
+        (
+          [
+            "doorRefNumber",
+            "doorType",
+            "fireRating",
+            "compliance",
+            "comments",
+          ] as ColKey[]
+        ).some((k) => match(r, k))
       );
     } else {
       return rows.filter((r) => match(r, searchIn));
@@ -149,7 +179,10 @@ export default function DataGridTable({
       const bv = (b as any)[sortBy];
       const sa = String(av ?? "");
       const sb = String(b ?? "");
-      const cmp = sa.localeCompare(sb, undefined, { sensitivity: "base", numeric: true });
+      const cmp = sa.localeCompare(sb, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
       return sortDir === "asc" ? cmp : -cmp;
     });
     return copy;
@@ -169,17 +202,33 @@ export default function DataGridTable({
     (deleteMode ? ACTION_WIDTH : 0);
 
   // ----- actions -----
-  const gotoDashBoard = (drn: string, mode: "view" | "edit") => {
+  const gotoDashBoard = (
+    drn: string,
+    mode: "view" | "edit",
+    propertyMasterId?: string
+  ) => {
+    console.log("➡️ Navigating to ViewSurvey with:", {
+      drn,
+      mode,
+      propertyMasterId,
+    });
     router.push({
       pathname: "/viewSurvey/[doorRefNumber]",
-      params: { doorRefNumber: drn, mode },
+      params: { doorRefNumber: drn, mode, propertyMasterId }, // 👈 forward it
     });
   };
-  const deleteRow = (id: number) => setRows(prev => prev.filter(r => r.id !== id));
+  const deleteRow = (id: number) =>
+    setRows((prev) => prev.filter((r) => r.id !== id));
 
   // ----- header & row -----
   const HeaderRow = () => (
-    <View style={[styles.row, styles.headerRow, { width: tableWidth, minHeight: ROW_MIN_HEIGHT }]}>
+    <View
+      style={[
+        styles.row,
+        styles.headerRow,
+        { width: tableWidth, minHeight: ROW_MIN_HEIGHT },
+      ]}
+    >
       {visibleColumns.map((col) => (
         <TouchableOpacity
           key={col.key}
@@ -194,17 +243,36 @@ export default function DataGridTable({
         </TouchableOpacity>
       ))}
       {showView && (
-        <View style={[styles.headerCell, styles.actionHeaderCell, { width: ACTION_WIDTH }]}>
+        <View
+          style={[
+            styles.headerCell,
+            styles.actionHeaderCell,
+            { width: ACTION_WIDTH },
+          ]}
+        >
           <Text style={styles.headerText}>View</Text>
         </View>
       )}
       {showEdit && shouldShowEditColumn && (
-        <View style={[styles.headerCell, styles.actionHeaderCell, { width: ACTION_WIDTH }]}>
+        <View
+          style={[
+            styles.headerCell,
+            styles.actionHeaderCell,
+            { width: ACTION_WIDTH },
+          ]}
+        >
           <Text style={styles.headerText}>Edit</Text>
         </View>
       )}
+
       {deleteMode && (
-        <View style={[styles.headerCell, styles.actionHeaderCell, { width: ACTION_WIDTH }]}>
+        <View
+          style={[
+            styles.headerCell,
+            styles.actionHeaderCell,
+            { width: ACTION_WIDTH },
+          ]}
+        >
           <Text style={styles.headerText}>Remove</Text>
         </View>
       )}
@@ -212,48 +280,78 @@ export default function DataGridTable({
   );
 
   const RowView = ({ item }: { item: TableRowData }) => (
-    <View style={[styles.row, { width: tableWidth, minHeight: ROW_MIN_HEIGHT }]}>
+    <View
+      style={[styles.row, { width: tableWidth, minHeight: ROW_MIN_HEIGHT }]}
+    >
       {visibleColumns.map((col) => {
         if (col.key === "compliance") {
           return (
-            <View key={col.key} style={[styles.cellWrap, { width: col.width }, styles.compCell]}>
-              <Text style={item.compliance === "Compliant" ? styles.greenDot : styles.orangeDot}>● </Text>
+            <View
+              key={col.key}
+              style={[styles.cellWrap, { width: col.width }, styles.compCell]}
+            >
+              <Text
+                style={
+                  item.compliance === "Compliant"
+                    ? styles.greenDot
+                    : styles.orangeDot
+                }
+              >
+                ●{" "}
+              </Text>
               <Text numberOfLines={1}>{item.compliance}</Text>
             </View>
           );
         }
         const value =
           col.key === "fireRating"
-            ? (item.fireRating === "Select" ? "-" : item.fireRating)
+            ? item.fireRating === "Select"
+              ? "-"
+              : item.fireRating
             : col.key === "comments"
-            ? (item.comments || "-")
+            ? item.comments || "-"
             : String((item as any)[col.key] ?? "-");
 
         return (
           <View key={col.key} style={[styles.cellWrap, { width: col.width }]}>
-            <Text numberOfLines={1} style={styles.cellText}>{value}</Text>
+            <Text numberOfLines={1} style={styles.cellText}>
+              {value}
+            </Text>
           </View>
         );
       })}
 
       {showView && (
-        <TouchableOpacity
-          onPress={() => gotoDashBoard(item.doorRefNumber, "view")}
-          style={[styles.actionCell, { width: ACTION_WIDTH }]}
-        >
-          <MaterialIcons name="visibility" size={20} color="black" />
-        </TouchableOpacity>
-      )}
-      {showEdit && shouldShowEditColumn && (
-        <TouchableOpacity
-          onPress={() => gotoDashBoard(item.doorRefNumber, "edit")}
-          style={[styles.actionCell, { width: ACTION_WIDTH }]}
-        >
-          <MaterialIcons name="edit" size={20} color="black" />
-        </TouchableOpacity>
-      )}
+  <View style={[styles.actionCell, { width: ACTION_WIDTH }]}>
+    <TouchableOpacity
+      onPress={() =>
+        gotoDashBoard(item.doorRefNumber, "view", item.propertyMasterId)
+      }
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <MaterialIcons name="visibility" size={20} color="#000" />
+    </TouchableOpacity>
+  </View>
+)}
+
+{showEdit && shouldShowEditColumn && (
+  <View style={[styles.actionCell, { width: ACTION_WIDTH }]}>
+    <TouchableOpacity
+      onPress={() =>
+        gotoDashBoard(item.doorRefNumber, "edit", item.propertyMasterId)
+      }
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <MaterialIcons name="edit" size={20} color="#000" />
+    </TouchableOpacity>
+  </View>
+)}
+
       {deleteMode && (
-        <TouchableOpacity onPress={() => deleteRow(item.id)} style={[styles.actionCell, { width: ACTION_WIDTH }]}>
+        <TouchableOpacity
+          onPress={() => deleteRow(item.id)}
+          style={[styles.actionCell, { width: ACTION_WIDTH }]}
+        >
           <MaterialIcons name="delete" size={20} color="crimson" />
         </TouchableOpacity>
       )}
@@ -266,56 +364,71 @@ export default function DataGridTable({
       <View style={styles.toolbar}>
         {/* Search box */}
         <View style={styles.searchRow}>
-  {/* Search Input */}
-  <View style={styles.searchWrap}>
-    <MaterialIcons name="search" size={18} color="#666" />
-    <TextInput
-      placeholder={`Search${searchIn === "all" ? "" : ` in ${columns.find(c => c.key === searchIn)?.label}`}...`}
-      value={search}
-      onChangeText={setSearch}
-      style={styles.searchInput}
-      placeholderTextColor="#999"
-    />
-    {!!search && (
-      <TouchableOpacity onPress={() => setSearch("")}>
-        <MaterialIcons name="close" size={18} color="#666" />
-      </TouchableOpacity>
-    )}
-  </View>
+          {/* Search Input */}
+          <View style={styles.searchWrap}>
+            <MaterialIcons name="search" size={18} color="#666" />
+            <TextInput
+              placeholder={`Search${
+                searchIn === "all"
+                  ? ""
+                  : ` in ${columns.find((c) => c.key === searchIn)?.label}`
+              }...`}
+              value={search}
+              onChangeText={setSearch}
+              style={styles.searchInput}
+              placeholderTextColor="#999"
+            />
+            {!!search && (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <MaterialIcons name="close" size={18} color="#666" />
+              </TouchableOpacity>
+            )}
+          </View>
 
-  {/* Dropdown */}
-  <View style={styles.dropdownWrap}>
-    <TouchableOpacity
-      style={styles.dropdownButton}
-      onPress={() => setShowSearchMenu(s => !s)}
-    >
-      <Text style={styles.dropdownText}>
-        {searchIn === "all" ? "All Columns" : columns.find(c => c.key === searchIn)?.label}
-      </Text>
-      <MaterialIcons
-        name={showSearchMenu ? "keyboard-arrow-up" : "keyboard-arrow-down"}
-        size={18}
-        color="#333"
-      />
-    </TouchableOpacity>
-    {showSearchMenu && (
-      <View style={styles.dropdownMenu}>
-        <TouchableOpacity onPress={() => { setSearchIn("all"); setShowSearchMenu(false); }}>
-          <Text style={styles.dropdownItem}>All</Text>
-        </TouchableOpacity>
-        {searchableCols.map(sc => (
-          <TouchableOpacity
-            key={sc.key}
-            onPress={() => { setSearchIn(sc.key); setShowSearchMenu(false); }}
-          >
-            <Text style={styles.dropdownItem}>{sc.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    )}
-  </View>
-</View>
-
+          {/* Dropdown */}
+          <View style={styles.dropdownWrap}>
+            <TouchableOpacity
+              style={styles.dropdownButton}
+              onPress={() => setShowSearchMenu((s) => !s)}
+            >
+              <Text style={styles.dropdownText}>
+                {searchIn === "all"
+                  ? "All Columns"
+                  : columns.find((c) => c.key === searchIn)?.label}
+              </Text>
+              <MaterialIcons
+                name={
+                  showSearchMenu ? "keyboard-arrow-up" : "keyboard-arrow-down"
+                }
+                size={18}
+                color="#333"
+              />
+            </TouchableOpacity>
+            {showSearchMenu && (
+              <View style={styles.dropdownMenu}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchIn("all");
+                    setShowSearchMenu(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItem}>All</Text>
+                </TouchableOpacity>
+                {searchableCols.map((sc) => (
+                  <TouchableOpacity
+                    key={sc.key}
+                    onPress={() => {
+                      setSearchIn(sc.key);
+                      setShowSearchMenu(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItem}>{sc.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
 
         {/* Columns toggle */}
         <View style={styles.columnsPanel}>
@@ -323,9 +436,12 @@ export default function DataGridTable({
           {columns.map((c, i) => (
             <TouchableOpacity
               key={c.key}
-              style={[styles.colToggle, c.visible ? styles.colOn : styles.colOff]}
+              style={[
+                styles.colToggle,
+                c.visible ? styles.colOn : styles.colOff,
+              ]}
               onPress={() =>
-                setColumns(prev => {
+                setColumns((prev) => {
                   const copy = [...prev];
                   copy[i] = { ...copy[i], visible: !copy[i].visible };
                   return copy;
@@ -339,13 +455,13 @@ export default function DataGridTable({
           {/* actions */}
           <TouchableOpacity
             style={[styles.colToggle, showView ? styles.colOn : styles.colOff]}
-            onPress={() => setShowView(v => !v)}
+            onPress={() => setShowView((v) => !v)}
           >
             <Text style={styles.colToggleText}>View</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.colToggle, showEdit ? styles.colOn : styles.colOff]}
-            onPress={() => setShowEdit(v => !v)}
+            onPress={() => setShowEdit((v) => !v)}
           >
             <Text style={styles.colToggleText}>Edit</Text>
           </TouchableOpacity>
@@ -393,7 +509,13 @@ export default function DataGridTable({
             keyExtractor={(item) => String(item.id)}
             renderItem={({ item }) => <RowView item={item} />}
             ListEmptyComponent={
-              <View style={{ width: tableWidth, paddingVertical: 20, alignItems: "center" }}>
+              <View
+                style={{
+                  width: tableWidth,
+                  paddingVertical: 20,
+                  alignItems: "center",
+                }}
+              >
                 <Text style={{ color: "#777" }}>No records found</Text>
               </View>
             }
@@ -410,7 +532,7 @@ export default function DataGridTable({
       {pageSize !== -1 && (
         <View style={styles.paginationBar}>
           <TouchableOpacity
-            onPress={() => setPage(p => Math.max(0, p - 1))}
+            onPress={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
             style={[styles.pageBtn, page === 0 && styles.pageBtnDisabled]}
           >
@@ -418,18 +540,20 @@ export default function DataGridTable({
           </TouchableOpacity>
 
           <Text style={styles.pageInfo}>
-            Page {page + 1} of {Math.max(1, Math.ceil(sorted.length / pageSize))}
+            Page {page + 1} of{" "}
+            {Math.max(1, Math.ceil(sorted.length / pageSize))}
           </Text>
 
           <TouchableOpacity
             onPress={() => {
               const last = Math.max(0, Math.ceil(sorted.length / pageSize) - 1);
-              setPage(p => Math.min(last, p + 1));
+              setPage((p) => Math.min(last, p + 1));
             }}
             disabled={page >= Math.ceil(sorted.length / pageSize) - 1}
             style={[
               styles.pageBtn,
-              page >= Math.ceil(sorted.length / pageSize) - 1 && styles.pageBtnDisabled,
+              page >= Math.ceil(sorted.length / pageSize) - 1 &&
+                styles.pageBtnDisabled,
             ]}
           >
             <Text style={styles.pageBtnText}>Next</Text>
@@ -445,8 +569,7 @@ const styles = StyleSheet.create({
 
   // Toolbar
   toolbar: { gap: 10, marginBottom: 10 },
- 
- 
+
   // dropdownText: { fontSize: 12, color: "#333" },
 
   // dropdownItem: { paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
@@ -509,70 +632,68 @@ const styles = StyleSheet.create({
   sizePillActive: { borderColor: "#1976d2", backgroundColor: "#e3f2fd" },
   sizePillText: { fontSize: 12 },
 
-
   searchRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  marginBottom: 10,
-},
-searchWrap: {
-  width: "20%", // Fixed to 30% of the row width
-  flexDirection: "row",
-  alignItems: "center",
-  borderWidth: 1,
-  borderColor: "#ccc",
-  borderRadius: 5,
-  paddingHorizontal: 8,
-  marginRight: 8,
-},
-// searchWrap: {
-//   width: "20%", // Fixed to 30% of the row width
-//   flexDirection: "row"
-//   alignItems: "center",
-//   borderWidth: 1,
-//   borderColor: "#ccc",
-//   borderRadius: 5,
-//   paddingHorizontal: 8,
-//   marginRight: 8,
-// },
-searchInput: {
-  flex: 1,
-  paddingVertical: 4,
-  color: "#000",
-},
-dropdownWrap: {
-  width: 150,
-},
-dropdownButton: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  paddingHorizontal: 8,
-  paddingVertical: 6,
-  borderWidth: 1,
-  borderColor: "#ccc",
-  borderRadius: 5,
-},
-dropdownMenu: {
-  marginTop: 2,
-  backgroundColor: "#fff",
-  borderWidth: 1,
-  borderColor: "#ccc",
-  borderRadius: 5,
-  zIndex: 999,
-  position: "absolute",
-  top: 38,
-  width: "100%",
-},
-dropdownItem: {
-  padding: 8,
-  borderBottomWidth: 1,
-  borderBottomColor: "#eee",
-},
-dropdownText: {
-  color: "#333",
-},
-
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  searchWrap: {
+    width: "20%", // Fixed to 30% of the row width
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    paddingHorizontal: 8,
+    marginRight: 8,
+  },
+  // searchWrap: {
+  //   width: "20%", // Fixed to 30% of the row width
+  //   flexDirection: "row"
+  //   alignItems: "center",
+  //   borderWidth: 1,
+  //   borderColor: "#ccc",
+  //   borderRadius: 5,
+  //   paddingHorizontal: 8,
+  //   marginRight: 8,
+  // },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 4,
+    color: "#000",
+  },
+  dropdownWrap: {
+    width: 150,
+  },
+  dropdownButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+  },
+  dropdownMenu: {
+    marginTop: 2,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    zIndex: 999,
+    position: "absolute",
+    top: 38,
+    width: "100%",
+  },
+  dropdownItem: {
+    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  dropdownText: {
+    color: "#333",
+  },
 
   // Table
   row: {

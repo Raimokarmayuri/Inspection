@@ -515,6 +515,7 @@ const canDownload = canAdminOrApproverDownload || canInspectorDownload;
                           fireRating: item.fireRating || "-",
                           compliance: item.isCompliant,
                           comments: item.comments,
+                          propertyMasterId: propertyId,
                         }))}
                         userRole={userRole}
                         inspectorInspectionStatus={inspectorInspectionStatus}

@@ -278,12 +278,37 @@ const Dashboard = () => {
   };
 
   const handleComplianceToggle = (name: string, value: boolean) => {
-    setComplianceCheck((prev: any) => ({ ...prev, [name]: value }));
-    if (name === "doorGlazing") {
-      setIsGlazing(value);
-    }
-    setActionMenuFlag((prev: any) => ({ ...prev, [name]: value }));
-  };
+  setComplianceCheck((prev: any) => ({ ...prev, [name]: value }));
+
+  // doorGlazing side effect
+  if (name === "doorGlazing") setIsGlazing(value);
+
+  // If toggled to YES (true), nuke any action fields & photos so they don't trip validation later.
+  if (value === true) {
+    setComplianceCheck((prev) => {
+      const cleared = { ...prev };
+      const suffixes = [
+        "Timeline",
+        "Severity",
+        "Comments",
+        "Category",
+        "DueDate",
+        "Remediation",
+      ];
+      for (const s of suffixes) cleared[`${name}${s}`] = s === "Comments" ? "" : "Select";
+      return cleared;
+    });
+
+    // also clear saved images for that compliance item
+    setActionImages((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  }
+};
+
 
   const handleFormDataChange = (name: string, value: string) => {
     if (name === "doorType") {
@@ -870,46 +895,57 @@ const handleImagesChange = async (newImages: string[], field: string) => {
   };
 
   // build one list of all missing MiniCapture requirements (physical + compliance)
-  const collectMiniCaptureMissing = (): string[] => {
-    const lines: string[] = [];
-    const title = (k: string) => LABELS[k] || k;
+ const PHYSICAL_KEYS: string[] = [
+  "head",
+  "hinge",
+  "closing",
+  "threshold",
+  "doorThickness",
+  "frameDepth",
+  "doorSize",
+  "fullDoorsetSize",
+];
 
-    // PHYSICAL: any gap where action menu is showing
-    Object.keys(actionmenuFlag).forEach((k) => {
-      if (actionmenuFlag[k]) {
-        const missing = requiredMiniErrorsForPrefix(formData, k);
-        if (missing.length) lines.push(`${title(k)}: ${missing.join(", ")}`);
-      }
-    });
+const collectMiniCaptureMissing = (): string[] => {
+  const lines: string[] = [];
+  const title = (k: string) => LABELS[k] || k;
 
-    // COMPLIANCE: only for items that show MiniCapture AND are toggled to "No"
-    const complianceCandidates = [
-      "intumescentStrips",
-      "coldSmokeSeals",
-      "fireLockedSign",
-      "fireShutSign",
-      "pyroGlazing",
-    ] as const;
+  // PHYSICAL: only check the known physical keys and only when their flag is true
+  PHYSICAL_KEYS.forEach((k) => {
+    if (actionmenuFlag[k]) {
+      const missing = requiredMiniErrorsForPrefix(formData, k);
+      if (missing.length) lines.push(`${title(k)}: ${missing.join(", ")}`);
+    }
+  });
 
-    complianceCandidates.forEach((key) => {
-      const fireRes = String(formData.fireResistance ?? "");
-      const showColdSmoke = ["5", "6", "7"].includes(fireRes);
-      const showPyro =
-        complianceCheck["doorGlazing"] === true && isGlazing === true;
+  // COMPLIANCE: only when toggle is NO (false) AND the item should be shown
+  const complianceCandidates = [
+    "intumescentStrips",
+    "coldSmokeSeals",
+    "fireLockedSign",
+    "fireShutSign",
+    "pyroGlazing",
+  ] as const;
 
-      const shouldShow =
-        complianceCheck[key] === false &&
-        (key !== "coldSmokeSeals" || showColdSmoke) &&
-        (key !== "pyroGlazing" || showPyro);
+  const fireRes = String(formData.fireResistance ?? "");
+  const showColdSmoke = ["5", "6", "7"].includes(fireRes);
+  const showPyro = complianceCheck["doorGlazing"] === true && isGlazing === true;
 
-      if (shouldShow) {
-        const missing = requiredMiniErrorsForPrefix(complianceCheck, key);
-        if (missing.length) lines.push(`${title(key)}: ${missing.join(", ")}`);
-      }
-    });
+  complianceCandidates.forEach((key) => {
+    const shouldShow =
+      complianceCheck[key] === false &&
+      (key !== "coldSmokeSeals" || showColdSmoke) &&
+      (key !== "pyroGlazing" || showPyro);
 
-    return lines;
-  };
+    if (shouldShow) {
+      const missing = requiredMiniErrorsForPrefix(complianceCheck, key);
+      if (missing.length) lines.push(`${title(key)}: ${missing.join(", ")}`);
+    }
+  });
+
+  return lines;
+};
+
 
   const validateAndSubmit = async () => {
     const e: Record<string, string> = {};
@@ -934,6 +970,8 @@ const handleImagesChange = async (newImages: string[], field: string) => {
     if (isEmpty(basicInfo.floorPlan))
       e.floorPlan = "Floor plan file is required";
     if (isEmpty(formData.doorPhoto)) e.doorPhoto = "Door photo is required";
+        // if (isEmpty(formData.doorOther)) e.doorPhoto = "DoorOther is required";
+
 
     // Measurements (add/remove as needed)
     const reqMeasurements = [
@@ -1092,7 +1130,7 @@ const handleImagesChange = async (newImages: string[], field: string) => {
         const remediation =
           formData[`${key}Remediation` as keyof typeof formData] || "";
         const dueDate =
-          formData[`${key}DueDate` as keyof typeof formData] || nowIso;
+          formData[`${key}DueDate` as keyof typeof formData];
         const comment =
           formData[`${key}Comments` as keyof typeof formData] || "";
 
@@ -1132,27 +1170,33 @@ const handleImagesChange = async (newImages: string[], field: string) => {
 
       const response = await http.post(SAVE_SURVEY_FORM_DATA, payload);
 
-      if (response.status === 200 || response.status === 201) {
-        setMessage("✅ Inspection form submitted successfully!");
-        Alert.alert("Success", "✅ Inspection form submitted successfully.", [
-          { text: "OK", onPress: () => navigation.goBack() },
-        ]);
-      } else {
-        Alert.alert("❌ Error", "Submission failed. Try again.");
-      }
-    } catch (error: any) {
-      if (error.response?.data?.errors) {
-        console.error("🚨 Validation Errors:", error.response.data.errors);
-        const firstKey = Object.keys(error.response.data.errors)[0];
-        const firstMsg = error.response.data.errors[firstKey][0];
-        Alert.alert("Validation Error", `${firstKey}: ${firstMsg}`);
-      } else {
-        Alert.alert("Submission Error", error.message || "Unknown error");
-      }
-    } finally {
-      setSubmitting(false);
+       if (response.status === 200 || response.status === 201) {
+      // ✅ Success message
+      Alert.alert("Success", "✅ Inspection form submitted successfully.", [
+        {
+          text: "OK",
+          onPress: () => {
+            // navigate back when OK is pressed
+            navigation.goBack();
+          },
+        },
+      ]);
+    } else {
+      Alert.alert("❌ Error", "Submission failed. Try again.");
     }
-  };
+     } catch (error: any) {
+    if (error.response?.data?.errors) {
+      console.error("🚨 Validation Errors:", error.response.data.errors);
+      const firstKey = Object.keys(error.response.data.errors)[0];
+      const firstMsg = error.response.data.errors[firstKey][0];
+      Alert.alert("Validation Error", `${firstKey}: ${firstMsg}`);
+    } else {
+      Alert.alert("Submission Error", error.message || "Unknown error");
+    }
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const handleChange = (fieldName: string, value: string) => {
     if (fieldName === "comments") {
@@ -1216,6 +1260,7 @@ const handleImagesChange = async (newImages: string[], field: string) => {
             // ref={(r) => (mandatoryFieldRef.current.floor = r)}
             style={[styles.input, errors.floor && styles.errorInput]}
             value={basicInfo.floor}
+            keyboardType="numeric"
             onChangeText={(text) =>
               setBasicInfo((prev) => ({ ...prev, floor: text }))
             }
@@ -1293,6 +1338,8 @@ const handleImagesChange = async (newImages: string[], field: string) => {
 
           {doorOtherFlag && (
             <>
+                      {/* {errors.doorOther && <Text style={styles.errorText}>{errors.doorOther}</Text>} */}
+
               <Text style={styles.label}>Other Door Type*</Text>
               <TextInput
                 style={styles.input}
@@ -1997,6 +2044,6 @@ function setHighlightDoor(arg0: boolean) {
   throw new Error("Function not implemented.");
 }
 
-function showAlert(arg0: string, arg1: string) {
-  // throw new Error("Function not implemented.");
+function showAlert(title: string, message: string) {
+  Alert.alert(title, message);
 }

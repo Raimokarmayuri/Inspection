@@ -6,8 +6,7 @@ const Footer: React.FC = () => {
     <View style={styles.footer}>
       <Text style={styles.logo}>[a]cache</Text>
       <Text style={styles.copy}>
-        Copyright © 2025 Acache Technologies Private Limited. All rights reserved.
-      </Text>
+ <Text>© 2025 Acache. All rights reserved.</Text>      </Text>
     </View>
   );
 };
