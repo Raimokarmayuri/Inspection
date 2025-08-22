@@ -620,13 +620,7 @@ const uploadImageAPI = async (newImages: string[], field: string): Promise<strin
   };
 
   const handleCancel = () => {
-    if (navigation?.canGoBack?.()) {
     navigation.goBack();
-    return;
-  }
-
-    navigation.navigate("/propertyForm" as never);
-
   };
 
   // --- helpers (top-level inside the component) ---

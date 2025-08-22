@@ -866,6 +866,7 @@ const FormComponent: React.FC<FormProps> = ({
 
         <TouchableOpacity
           onPress={() => navigation.goBack()}
+          // onPress={handleCancel}
           style={[
             {
               backgroundColor: "#ffffff",
