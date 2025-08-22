@@ -319,6 +319,7 @@ const Dashboard = () => {
         ...prev,
         doorType: value,
         doorTypeName: selectedName,
+         doorOther: selectedName === "Other" ? prev.doorOther : "",
       }));
 
       setDoorOtherFlag(selectedName === "Other");
@@ -929,7 +930,7 @@ const collectMiniCaptureMissing = (): string[] => {
 
   const fireRes = String(formData.fireResistance ?? "");
   const showColdSmoke = ["5", "6", "7"].includes(fireRes);
-  const showPyro = complianceCheck["doorGlazing"] === true && isGlazing === true;
+  const showPyro = complianceCheck["doorGlazing"] === true;
 
   complianceCandidates.forEach((key) => {
     const shouldShow =
@@ -1620,8 +1621,8 @@ const collectMiniCaptureMissing = (): string[] => {
             let showFireLockedSign =
               complianceCheck["selfClosingDevice"] === false; // rule 1
 
-            let showPyroGlazing =
-              complianceCheck["doorGlazing"] === true && isGlazing; // rule 2
+let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
+
 
             const items: {
               key: ComplianceKey;

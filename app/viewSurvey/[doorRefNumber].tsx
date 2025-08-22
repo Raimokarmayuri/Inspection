@@ -83,15 +83,36 @@ const formatDateString = (date: string | Date): string => {
   )}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+const isHttpUrl = (u?: string) => !!u && /^https?:\/\//i.test(u);
+
+
 const ViewSurvey: React.FC = () => {
   const params = useLocalSearchParams();
   const navigation = useNavigation();
 
+   interface BasicInfo {
+    buildingName: string;
+    uniqueRef: string;
+    date: string;
+    location: string;
+    floor: string;
+    floorPlan: string[]; // make sure this matches what you're assigning
+    comments: string;
+  }
+  
   // const mode = params.mode?.toString(); // "view" | "edit" | undefined
   const userObj = useSelector((state: RootState) => state.user?.userObj);
-
-  const [basicInfo, setBasicInfo] = useState<any>({});
-  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
+  const [doorOtherFlag, setDoorOtherFlag] = useState(false);
+  const [basicInfo, setBasicInfo] = useState<BasicInfo>({
+    buildingName: "",
+    uniqueRef: "",
+    date: new Date().toISOString().split("T")[0],
+    location: "",
+    floor: "",
+    floorPlan: [], // should be string, not array or object
+    comments: "",
+  });
+    const [additionalImages, setAdditionalImages] = useState<string[]>([]);
   const [propertyId, setPropertyId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>({} as FormData);
@@ -135,6 +156,41 @@ const ViewSurvey: React.FC = () => {
     toastString: "",
   });
 
+  // ---------- Validation helpers ----------
+  type FieldKey =
+    // keys that you also use to register refs from FormComponent
+    | "date"
+    | "floor"
+    | "doorNumber"
+    | "doorType"
+    | "doorOther"
+    | "fireResistance"
+    | "hingeLocation";
+
+  const isBlank = (v: any) =>
+    v === undefined || v === null || String(v).trim() === "";
+
+  const LABELS: Record<FieldKey, string> = {
+    date: "Inspection Date",
+    floor: "Floor",
+    doorNumber: "Door Reference/Number",
+    doorType: "Door Type",
+    doorOther: "Other Door Type",
+    fireResistance: "Fire Rating",
+    hingeLocation: "Hinge Position",
+  };
+
+  const REQUIRED_ALWAYS: FieldKey[] = [
+    "date",
+    "floor",
+    "doorNumber",
+    "doorType",
+    "fireResistance",
+    "hingeLocation",
+  ];
+
+  const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
+
   // const doorRefNumber =
   //   typeof params.doorRefNumber === "string"
   //     ? params.doorRefNumber
@@ -144,8 +200,72 @@ const ViewSurvey: React.FC = () => {
 
   // ----- Handlers: plain form changes -----
   // ViewSurvey.tsx
+  // const handleFormDataChange = (field: string, value: string) => {
+  //   setFormData((prev) => ({ ...prev, [field]: value }));
+  //   if (!isView && ["head", "hinge", "threshold"].includes(field)) {
+  //     const n = parseFloat(String(value).replace(",", "."));
+  //     setActionMenuFlag((prev) => ({
+  //       ...prev,
+  //       [field]: Number.isFinite(n) && n > 3,
+  //     }));
+  //   }
+  // };
+
+  // helper: look up the label for a doorType id
+  const getDoorTypeName = (
+    id?: string | number,
+    opts?: { doorTypeId: number; doorTypeName: string }[]
+  ) => {
+    if (!id || !opts?.length) return "";
+    const found = opts.find((o) => String(o.doorTypeId) === String(id));
+    return found?.doorTypeName ?? "";
+  };
+
   const handleFormDataChange = (field: string, value: string) => {
+    // 1) Keep both "other" keys in sync no matter which one the UI touches
+    if (field === "doorOther" || field === "otherDoorTypeName") {
+      setFormData((prev) => ({
+        ...prev,
+        doorOther: value,
+        otherDoorTypeName: value,
+      }));
+      return;
+    }
+
+    // 2) When Door Type changes:
+    if (field === "doorType") {
+      // Resolve the display name for the selected id
+      const selectedName = getDoorTypeName(value, doorTypesOption)
+        ?.trim()
+        .toLowerCase();
+
+      const isOther =
+        selectedName?.includes("other") ||
+        String(value).trim().toLowerCase() === "other"; // in case backend literally sends "other"
+
+      // Toggle the extra input visibility
+      setDoorOtherFlag(isOther);
+
+      setFormData((prev) => ({
+        ...prev,
+        doorType: value,
+        doorTypeName:
+          getDoorTypeName(value, doorTypesOption) || prev.doorTypeName,
+        // If NOT Other, clear any stale custom text; if Other, keep whatever is already there
+        doorOther: isOther
+          ? prev.doorOther ?? prev.otherDoorTypeName ?? ""
+          : "",
+        otherDoorTypeName: isOther
+          ? prev.otherDoorTypeName ?? prev.doorOther ?? ""
+          : "",
+      }));
+      return;
+    }
+
+    // 3) Default: just set the field
     setFormData((prev) => ({ ...prev, [field]: value }));
+
+    // 4) Your existing action-menu rule for gap fields (>3)
     if (!isView && ["head", "hinge", "threshold"].includes(field)) {
       const n = parseFloat(String(value).replace(",", "."));
       setActionMenuFlag((prev) => ({
@@ -167,47 +287,46 @@ const ViewSurvey: React.FC = () => {
   };
 
   const clearCompliance = (k: ComplianceKey, next: any) => {
-  next[`${k}Timeline`] = "";
-  next[`${k}Severity`] = "";
-  next[`${k}Category`] = "";
-  next[`${k}Comments`] = "";
-  next[`${k}DueDate`]   = "";
-  next[`${k}Remediation`] = "";
-  next[`${k}Images`] = []; // if you ever store Images on cc
-  setActionImages((ai) => ({ ...ai, [k]: [] }));
-};
+    next[`${k}Timeline`] = "";
+    next[`${k}Severity`] = "";
+    next[`${k}Category`] = "";
+    next[`${k}Comments`] = "";
+    next[`${k}DueDate`] = "";
+    next[`${k}Remediation`] = "";
+    next[`${k}Images`] = []; // if you ever store Images on cc
+    setActionImages((ai) => ({ ...ai, [k]: [] }));
+  };
 
-const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
-  setComplianceCheck((prev) => {
-    const next: any = { ...prev, [field]: nextVal };
+  const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
+    setComplianceCheck((prev) => {
+      const next: any = { ...prev, [field]: nextVal };
 
-    // Self closer → hide Keep Locked when YES
-    if (field === "selfClosingDevice") {
-      setFireKeepLocked(!nextVal);
+      // Self closer → hide Keep Locked when YES
+      if (field === "selfClosingDevice") {
+        setFireKeepLocked(!nextVal);
+        if (nextVal) {
+          next.fireLockedSign = true;
+          clearCompliance("fireLockedSign", next);
+        }
+      }
+
+      // Glazing → hide Pyro when NO
+      if (field === "doorGlazing") {
+        setIsGlazing(nextVal);
+        if (!nextVal) {
+          next.pyroGlazing = true;
+          clearCompliance("pyroGlazing", next);
+        }
+      }
+
+      // Generic: if toggled to YES, clear its own action/images
       if (nextVal) {
-        next.fireLockedSign = true;
-        clearCompliance("fireLockedSign", next);
+        clearCompliance(field, next);
       }
-    }
 
-    // Glazing → hide Pyro when NO
-    if (field === "doorGlazing") {
-      setIsGlazing(nextVal);
-      if (!nextVal) {
-        next.pyroGlazing = true;
-        clearCompliance("pyroGlazing", next);
-      }
-    }
-
-    // Generic: if toggled to YES, clear its own action/images
-    if (nextVal) {
-      clearCompliance(field, next);
-    }
-
-    return next;
-  });
-};
-
+      return next;
+    });
+  };
 
   // ----- Handlers: MiniCapture integration -----
   // keep field-first internally
@@ -218,134 +337,202 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
   //   setFormData(prev => ({ ...prev, [`${key}Images`]: images }));
   // };
 
-  async function base64DataUrlToFileUri(
-    dataUrl: string
-  ): Promise<{ uri: string; name: string; type: string }> {
-    const match = dataUrl.match(/^data:(.+?);base64,(.*)$/);
-    const type = match?.[1] || "image/jpeg";
-    const base64 = match?.[2] || dataUrl.replace(/^data:.+;base64,/, "");
-    const name = `Upload_${Date.now()}.${type.includes("png") ? "png" : "jpg"}`;
-    const path = FileSystem.cacheDirectory + name;
-    await FileSystem.writeAsStringAsync(path, base64, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return { uri: path, name, type };
-  }
+async function base64DataUrlToFileUri(
+  dataUrl: string
+): Promise<{ uri: string; name: string; type: string }> {
+  console.log("[upload] base64DataUrlToFileUri start", {
+    len: dataUrl?.length,
+    head: dataUrl?.slice(0, 30),
+  });
 
-  const guessMimeFromName = (name: string) => {
-    const ext = name.split(".").pop()?.toLowerCase();
-    if (ext === "png") return "image/png";
-    if (ext === "webp") return "image/webp";
-    return "image/jpeg";
-  };
-  async function normaliseForUpload(
-    src: string,
-    field: string
-  ): Promise<{ uri: string; name: string; type: string }> {
-    if (src.startsWith("data:image/")) {
-      return base64DataUrlToFileUri(src);
+  if (!dataUrl) throw new Error("Empty dataUrl");
+  const match = dataUrl.match(/^data:(.+?);base64,(.*)$/);
+  const type = match?.[1] || "image/jpeg";
+  const base64 = match?.[2] || dataUrl.replace(/^data:.+;base64,/, "");
+  const name = `Upload_${Date.now()}.${type.includes("png") ? "png" : "jpg"}`;
+  const path = FileSystem.cacheDirectory + name;
+  await FileSystem.writeAsStringAsync(path, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+    console.log("[upload] base64DataUrlToFileUri wrote file", path);
+
+  return { uri: path, name, type };
+  
+}
+
+const guessMimeFromName = (name: string) => {
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  return "image/jpeg";
+};
+async function normaliseForUpload(
+  src: string,
+  field: string
+): Promise<{ uri: string; name: string; type: string }> {
+  console.log("[upload] normaliseForUpload start", {
+    field,
+    srcHead: src?.slice(0, 40),
+    platform: Platform.OS,
+  });
+
+  if (!src) throw new Error("Invalid image source");
+  if (src.startsWith("data:image/")) {
+    return base64DataUrlToFileUri(src);
+  }
+  const name = `${field}_Image_${Date.now()}.jpg`;
+  return { uri: src, name, type: guessMimeFromName(name) };
+}
+
+
+const uploadImageAPI = async (newImages: string[], field: string): Promise<string> => {
+  console.groupCollapsed("[upload] uploadImageAPI", field);
+  try {
+    const last = (newImages || []).filter(Boolean).pop();
+    console.log("[upload] last", last);
+    if (!last) return "";
+
+    // Already uploaded?
+    if (/^https?:\/\//i.test(last)) {
+      console.log("[upload] already a URL");
+      return last;
     }
-    const name = `${field}_Image_${Date.now()}.jpg`;
-    return { uri: src, name, type: guessMimeFromName(name) };
-  }
 
-  const uploadImageAPI = async (
-    newImages: string[],
-    field: string
-  ): Promise<string> => {
-    try {
-      const rawToken = userObj?.token ?? "";
-      if (!rawToken) {
-        console.warn("No auth token found in userObj");
-        return "";
-      }
+    // ---- auth/header/url ----
+    const rawToken = userObj?.token ?? "";
+    const auth = rawToken && (rawToken.startsWith("Bearer ") ? rawToken : `Bearer ${rawToken}`);
+    const apiBase = (hostName || "").replace(/\/+$/, "");
+    const url = `${apiBase}/api/Inspection/upload`;
 
-      // ✅ ensure exactly one "Bearer " prefix
-      const authHeader = rawToken.startsWith("Bearer ")
-        ? rawToken
-        : `Bearer ${rawToken}`;
+    // Build a local file path we can upload
+    const filenameBase = `${field}_${Date.now()}`;
+    let fileUri = last;
+    let name = `${filenameBase}.jpg`;
+    let type = "image/jpeg";
 
-      const latest = newImages[newImages.length - 1];
-      let filePart: { uri?: string; name: string; type: string } | File | Blob;
-      let name = `${field}_Image_${Date.now()}.jpg`;
-      let type = "image/jpeg";
+    if (last.startsWith("data:")) {
+      // data URL -> write to cache
+      const match = last.match(/^data:(.+?);base64,(.*)$/);
+      const mime = match?.[1] || "image/jpeg";
+      const base64 = match?.[2] || "";
+      const ext = mime.includes("png") ? "png" : "jpg";
+      name = `${filenameBase}.${ext}`;
+      type = mime;
+      fileUri = FileSystem.cacheDirectory + name;
+      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      console.log("[upload] wrote data URL to", fileUri);
+    } else if (!/^file:|^content:/i.test(last)) {
+      // any other scheme on native -> download first
+      const target = FileSystem.cacheDirectory + name;
+      const dl = await FileSystem.downloadAsync(last, target);
+      fileUri = dl.uri;
+      console.log("[upload] downloaded to", fileUri);
+    } else {
+      // file:// or content:// — keep as-is
+      const tail = last.split("/").pop() || name;
+      name = tail;
+      if (tail.toLowerCase().endsWith(".png")) type = "image/png";
+      console.log("[upload] using local file", fileUri, name, type);
+    }
 
-      if (Platform.OS === "web") {
-        const res = await fetch(latest);
-        const blob = await res.blob();
-        type = blob.type || type;
-        // Use File on web so the server gets a filename
-        filePart = new File([blob], name, { type });
-      } else {
-        const parts = await normaliseForUpload(latest, field);
-        name = parts.name;
-        type = parts.type;
-        filePart = { uri: parts.uri, name, type } as any;
-      }
-
+    if (Platform.OS === "web") {
+      // ---------- WEB: use fetch + FormData ----------
       const form = new FormData();
-      form.append("File", filePart as any, name);
+      const blob = await (await fetch(fileUri)).blob();
+      const ext = /png/i.test(blob.type) ? "png" : "jpg";
+      const webName = name.includes(".") ? name : `${filenameBase}.${ext}`;
+      form.append("File", blob, webName);
       form.append("Client", "ABC");
       form.append("Property", "Candor");
       form.append("InspectionDate", new Date().toISOString());
 
-      const resp = await fetch(`${hostName}api/Inspection/upload`, {
+      console.log("[upload] web POST", url);
+      const resp = await fetch(url, {
         method: "POST",
-        headers: {
-          Authorization: authHeader, // ✅
-          // DO NOT set Content-Type manually when sending FormData
-        },
+        headers: auth ? { Authorization: auth } : undefined,
         body: form,
-        // credentials: 'include', // only if your API uses cookies (likely not)
       });
-
       if (!resp.ok) {
-        const www = resp.headers.get("www-authenticate") || "";
         const text = await resp.text().catch(() => "");
-        console.error("Upload failed", {
-          status: resp.status,
-          wwwAuthenticate: www,
-          body: text?.slice(0, 300),
-        });
+        console.error("[upload] web failed", resp.status, text?.slice(0, 300));
         return "";
       }
-
       const data = await resp.json().catch(() => ({} as any));
+      console.log("[upload] web ok", data?.result?.blobUrl);
       return data?.result?.blobUrl || "";
-    } catch (err) {
-      console.error("uploadImageAPI error:", err);
-      return "";
+    } else {
+      // ---------- NATIVE: use FileSystem.uploadAsync (no FormData) ----------
+      console.log("[upload] native uploadAsync", { url, fileUri, name, type });
+      const result = await FileSystem.uploadAsync(url, fileUri, {
+        httpMethod: "POST",
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: "File",
+        parameters: {
+          Client: "ABC",
+          Property: "Candor",
+          InspectionDate: new Date().toISOString(),
+        },
+        headers: auth ? { Authorization: auth } : undefined,
+        mimeType: type, // optional
+      });
+
+      // result.body is a string
+      if (result.status !== 200) {
+        console.error("[upload] native failed", result.status, result.body?.slice(0, 300));
+        return "";
+      }
+      let data: any = {};
+      try {
+        data = JSON.parse(result.body);
+      } catch {}
+      console.log("[upload] native ok", data?.result?.blobUrl);
+      return data?.result?.blobUrl || "";
     }
-  };
+  } catch (err) {
+    console.error(`[upload] uploadImageAPI error (field: ${field})`, err);
+    return "";
+  } finally {
+    console.groupEnd();
+  }
+};
 
-  const handleImagesChangeMini = async (
-    newImages: string[],
-    field: string
-  ): Promise<void> => {
+
+
+
+
+
+  // helper
+  const isRemoteUrl = (u: string) => /^https?:\/\//i.test(u);
+
+  // MINI capture (physical/compliance)
+ const handleImagesChangeMini = async (newImages: string[], field: string) => {
+  console.groupCollapsed("[MINI] handleImagesChangeMini", field);
+  try {
     const prev = actionImages[field] || [];
+    const clean = (newImages || []).filter(Boolean);
+    console.log("[MINI] prev/clean", prev.length, clean.length);
 
-    // Only upload items that aren't already server URLs
-    const toUpload = newImages.filter(
-      (u) => !(u.startsWith("http://") || u.startsWith("https://"))
-    );
-    if (toUpload.length === 0) return;
+    const toUpload = clean.filter((u) => !/^https?:\/\//i.test(u));
+    console.log("[MINI] toUpload", toUpload.length);
 
-    // Upload each new image using your existing API helper
     const uploaded = (
       await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
     ).filter(Boolean) as string[];
 
-    if (uploaded.length === 0) return;
+    console.log("[MINI] uploaded", uploaded.length);
 
-    // Merge (and de-dupe just in case)
-    const next = Array.from(new Set([...prev, ...uploaded]));
-    setActionImages((prev) => ({ ...prev, [field]: next }));
-    setFormData((prev) => ({ ...prev, [`${field}Images`]: next }));
-    // setActionImages((prevMap) => ({ ...prevMap, [field]: next }));
+    const next = Array.from(new Set([...prev, ...uploaded, ...clean.filter((u)=>/^https?:\/\//i.test(u))]));
+    console.log("[MINI] next", next.length);
 
-    // (Optional) also mirror into formData so MiniCapture re-renders from it too
-    // setFormData((prev: any) => ({ ...prev, [`${field}Images`]: next }));
-  };
+    setActionImages((p) => ({ ...p, [field]: next }));
+    setFormData((p) => ({ ...p, [`${field}Images`]: next } as any));
+  } catch (e) {
+    console.error("[MINI] handleImagesChangeMini ERROR", e);
+  } finally {
+    console.groupEnd();
+  }
+};
+
 
   // REPLACE your handleDeleteImages with this:
   // const handleDeleteImages = (field: string, index: number) => {
@@ -362,40 +549,38 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
   //   });
   // };
   const handleDeleteImages = (index: number, field: string) => {
+  console.groupCollapsed("[BIG] handleDeleteImages", field);
+  try {
+    console.log("[BIG] delete index", index);
     switch (field) {
       case "Floor": {
-        const updated = [...basicInfo.floorPlan];
-        updated.splice(index, 1);
-        setBasicInfo((prev: any) => ({ ...prev, floorPlan: updated }));
+        const before = basicInfo.floorPlan || [];
+        const updated = before.filter((_, i) => i !== index);
+        console.log("[BIG] Floor before/after", before.length, "->", updated.length);
+        setBasicInfo((prev) => ({ ...prev, floorPlan: updated }));
         break;
       }
-
       case "Door": {
-        const updated = [...formData.doorPhoto];
-        updated.splice(index, 1);
-        setFormData((prev) => ({
-          ...prev,
-          doorPhoto: updated,
-          // Optional: clear doorPhoto if it's the one removed
-          // doorPhoto: updated[0] || "",
-        }));
+        const before = (formData as any).doorPhoto || [];
+        const updated = before.filter((_: any, i: number) => i !== index);
+        console.log("[BIG] Door before/after", before.length, "->", updated.length);
+        setFormData((prev) => ({ ...prev, doorPhoto: updated }));
         break;
       }
-
       default: {
-        const imgArr = actionImages[field] || [];
-        const updatedImages = imgArr.filter((_, i) => i !== index);
-        setActionImages((prev) => ({
-          ...prev,
-          [field]: updatedImages,
-        }));
+        const before = actionImages[field] || [];
+        const updated = before.filter((_, i) => i !== index);
+        console.log("[BIG] Mini", field, "before/after", before.length, "->", updated.length);
+        setActionImages((prev) => ({ ...prev, [field]: updated }));
+        setFormData((prev) => ({ ...prev, [`${field}Images`]: updated } as any));
         break;
       }
     }
+  } finally {
+    console.groupEnd();
+  }
+};
 
-    // Optional: delete from blob storage
-    // deleteImageAPI(imageToDelete);
-  };
 
   // const handleActionFieldsChange = (
   //   key: string,
@@ -435,11 +620,168 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
   };
 
   const handleCancel = () => {
+    if (navigation?.canGoBack?.()) {
     navigation.goBack();
+    return;
+  }
+
+    navigation.navigate("/propertyForm" as never);
+
   };
+
+  // --- helpers (top-level inside the component) ---
+ const isEmpty = (v: any) => {
+  if (v == null) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  const t = String(v).trim();
+  return t === "" || t.toLowerCase() === "select";
+};
+
+const showAlert = (title: string, msg: string) => {
+  Alert.alert(title, msg);
+};
+  // Focus first error using the refs you already register in FormComponent
+  const focusFirstError = (emap: Record<string, string>) => {
+     const key = Object.keys(emap)[0];
+  const ref = mandatoryFieldRef.current?.[key];
+  if (ref && typeof ref.focus === "function") {
+    try { ref.focus(); } catch {}
+  }
+    const preferOrder = [
+      "date",
+      "floor",
+      "doorType",
+      "doorOther",
+      "doorPhoto",
+      "hingeLocation",
+      "fireResistance",
+      "head",
+      "hinge",
+      "closing",
+      "threshold",
+      "doorThickness",
+      "frameDepth",
+      "doorSize",
+      "fullDoorsetSize",
+      "floorPlan",
+    ];
+    for (const key of preferOrder) {
+      if (emap[key]) {
+        const ref = mandatoryFieldRef.current?.[key];
+        if (ref && typeof ref.focus === "function") {
+          try {
+            ref.focus();
+          } catch {}
+        }
+        break;
+      }
+    }
+  };
+
+  // --- the validator you’ll call from the Submit button ---
+const validateRequired = async (status: string = "Compliant") => {
+  // View mode should never validate/submit edits
+  if (isView) {
+    await handleSubmit(status);
+    return;
+  }
+
+  setValidationFlag(true);
+
+  const e: Record<string, string> = {};
+
+  // -------- Base requireds --------
+  if (isEmpty(basicFormData?.date)) e.date = "Inspection Date is required";
+  if (isEmpty(basicFormData?.floor)) e.floor = "Floor is required";
+  if (isEmpty(formData?.doorType)) e.doorType = "Door Type is required";
+  if (doorOtherFlag && isEmpty((formData as any)?.doorOther))
+    e.doorOther = "Other Door Type is required";
+  if (isEmpty(formData?.doorNumber)) e.doorNumber = "Door Number is required";
+  if (isEmpty(formData?.hingeLocation))
+    e.hingeLocation = "Hinge Location is required";
+  if (isEmpty(formData?.fireResistance))
+    e.fireResistance = "Fire rating is required";
+
+  // Files / images
+  if (isEmpty(basicFormData?.floorPlan))
+    e.floorPlan = "Floor plan file is required";
+  if (isEmpty(formData?.doorPhoto))
+    e.doorPhoto = "Door photo is required";
+
+  // Measurements (always required)
+  ["head","hinge","closing","threshold",
+   "doorThickness","frameDepth","doorSize","fullDoorsetSize"
+  ].forEach((k) => {
+    if (isEmpty((formData as any)?.[k])) e[k] = `${k} is required`;
+  });
+
+  // Stop early for base errors
+  if (Object.keys(e).length) {
+    setErrors(e);
+    showAlert(
+      "Missing Required Fields",
+      Object.values(e).map(m => `• ${m}`).join("\n")
+    );
+    focusFirstError(e);
+    return;
+  }
+
+  // -------- MiniCapture conditional (>3 => action block required) --------
+ // --- only require sev, cat, rem, date for >3; no image/comment ---
+const missingMini: string[] = [];
+["head","hinge","closing","threshold"].forEach((field) => {
+  const val = Number((formData as any)[field]);
+  if (Number.isFinite(val) && val > 3) {
+    const sev = (formData as any)[`${field}Severity`] ?? "";
+    const cat = (formData as any)[`${field}Category`] ?? "";
+    const rem = (formData as any)[`${field}Remediation`] ?? "";
+    const dd  = (formData as any)[`${field}DueDate`] ?? "";
+
+    if ([sev, cat, rem, dd].some(isEmpty)) {
+      missingMini.push(`${field}: add severity, category, remediation, and due date`);
+    }
+  }
+});
+
+if (missingMini.length) {
+  showAlert(
+    "Missing Action Details",
+    `For gaps > 3mm, action details are mandatory:\n\n${missingMini.map(m => `• ${m}`).join("\n")}`
+  );
+  return false;
+}
+
+
+  if (missingMini.length) {
+    showAlert(
+      "Missing Action Details",
+      `For gaps > 3mm, action details are mandatory:\n\n${missingMini.map(m => `• ${m}`).join("\n")}`
+    );
+    return;
+  }
+
+  // ✅ all good
+  setErrors({});
+  await handleSubmit(status);
+};
+
+
 
   // ----- Submit -----
   const handleSubmit = async (status: string = "Compliance") => {
+    setValidationFlag(true);
+     const quickErrors: Record<string, string> = {};
+  if (!isView) {
+    if (isEmpty(basicFormData?.floor)) quickErrors.floor = "Floor is required";
+    if (isEmpty(formData?.doorType)) quickErrors.doorType = "Door Type is required";
+    if (isEmpty(formData?.hingeLocation)) quickErrors.hingeLocation = "Hinge Location is required";
+    if (Object.keys(quickErrors).length) {
+      setErrors(quickErrors);
+      focusFirstError(quickErrors);
+      return;
+    }
+  }
+    if (!validateRequired()) return;
     try {
       setSubmitting(true);
 
@@ -459,7 +801,7 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
           !!(formData as any)[`${k}Remediation`] ||
           !!(formData as any)[`${k}Comments`] ||
           !!(formData as any)[`${k}DueDate`];
-        return (Number.isFinite(m) && m >= 4) || hasAny;
+        return (Number.isFinite(m) && m >= 3) || hasAny;
       };
 
       // ---- physicalMeasurement ----
@@ -558,12 +900,12 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
       });
 
       // ---- door photos map ----
-      const doorPhotosArr: string[] =
-        (formData as any).doorPhoto ?? (formData as any).doorPhotos ?? [];
-      const doorImgObj: Record<string, string> = {};
-      doorPhotosArr.forEach((url, i) => {
-        doorImgObj[`Image ${i + 1} Path`] = url;
-      });
+       const doorImgArr = formData.doorPhoto;
+      const doorImgObj = {
+        additionalProp1: doorImgArr[0] || "",
+        additionalProp2: doorImgArr[1] || "",
+        additionalProp3: doorImgArr[2] || "",
+      };
 
       if (!propertyId || propertyId.toString().length !== 36) {
         Alert.alert(
@@ -672,10 +1014,13 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
   };
 
   const handleValidationOnSave = (status: string) => {
-    // keep your existing logic; call setValidationFlag instead of throwing
-    setValidationFlag(false);
-    // ... you can port your previous checks here ...
-    // for demo, just submit:
+    // Flip the flag if your FormComponent wants to show red borders, etc.
+    setValidationFlag(true);
+
+    // Block submit when invalid
+    if (!validateRequired()) return;
+
+    // Proceed only when valid
     handleSubmit(status);
   };
 
@@ -687,15 +1032,58 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
     }));
   };
 
-  const handleImagesChange = (images: string[], field: string) => {
-    if (field === "Floor") {
-      setBasicFormData((prev: any) => ({ ...prev, floorPlan: images }));
-    } else if (field === "Door") {
-      setFormData((prev: any) => ({ ...prev, doorPhotos: images }));
-    } else if (field === "Additional") {
-      setBasicFormData((prev: any) => ({ ...prev, additionalPhotos: images }));
+  // BIG capture (Floor, Door, Additional)
+const handleImagesChange = async (incomingList: string[], field: string) => {
+  console.groupCollapsed("[BIG] handleImagesChange", field);
+  try {
+    const clean = (incomingList || []).filter(Boolean);
+    console.log("[BIG] incoming clean", { count: clean.length, sample: clean.map(x => x.slice(0,60)) });
+
+    // Current state (server URLs only) for this field
+    const getExisting = () => {
+      switch (field) {
+        case "Floor":      return basicInfo.floorPlan || [];
+        case "Door":       return (formData as any).doorPhoto || [];
+        case "Additional": return (basicFormData as any).additionalPhotos || [];
+        default:           return [];
+      }
+    };
+    const existing = getExisting();
+    console.log("[BIG] existing (state)", { count: existing.length, sample: existing.map((x: string | any[])=>x.slice(0,60)) });
+
+    // Only upload the *new* local/base64 items (non-HTTP)
+    const locals = clean.filter((u) => !/^https?:\/\//i.test(u));
+    console.log("[BIG] locals to upload", locals.length);
+
+    const uploaded = (
+      await Promise.all(locals.map((u) => uploadImageAPI([u], field)))
+    ).filter(Boolean) as string[];
+
+    console.log("[BIG] uploaded urls", uploaded);
+
+    // Merge: keep existing + any already-HTTP in clean + uploaded
+    const keepHttp = clean.filter((u) => /^https?:\/\//i.test(u));
+    const next = Array.from(new Set([...existing, ...keepHttp, ...uploaded]));
+    console.log("[BIG] merged next", { count: next.length, sample: next.map(x=>x.slice(0,60)) });
+
+    switch (field) {
+      case "Floor":
+        setBasicInfo((prev) => ({ ...prev, floorPlan: next }));
+        break;
+      case "Door":
+        setFormData((prev) => ({ ...prev, doorPhoto: next }));
+        break;
+      case "Additional":
+        setBasicFormData((prev: any) => ({ ...prev, additionalPhotos: next }));
+        break;
     }
-  };
+  } catch (e) {
+    console.error("[BIG] handleImagesChange ERROR", e);
+  } finally {
+    console.groupEnd();
+  }
+};
+
 
   // ViewSurvey.tsx
   // const { mode } = useLocalSearchParams<{ mode?: string }>();
@@ -713,7 +1101,7 @@ const handleComplianceToggle = (field: ComplianceKey, nextVal: boolean) => {
 
   useEffect(() => {
     const modeNorm = (rawMode ?? "").toString().trim().toLowerCase();
-setIsView(modeNorm !== "edit");
+    setIsView(modeNorm !== "edit");
   }, [rawMode]);
 
   // ---- Data load ----
@@ -759,7 +1147,8 @@ setIsView(modeNorm !== "edit");
           doorNumber: data.inspectedDoorDto.doorNumber,
           doorType: data.inspectedDoorDto.doorTypeId,
           doorTypeName: data.inspectedDoorDto.doorTypeName,
-          doorOther: data.inspectedDoorDto.otherDoorTypeName,
+          doorOther: data.inspectedDoorDto.otherDoor,
+          // doorOther: data.inspectedDoorDto.otherDoorTypeName,
           doorLocation: data.inspectedDoorDto.doorLocation,
           fireResistance: data.physicalMeasurement.fireRatingID,
           hingeLocation: data.physicalMeasurement.hingePosition,
@@ -779,6 +1168,8 @@ setIsView(modeNorm !== "edit");
             (url): url is string => !!url
           ),
         };
+
+        console.log("otherdoor", data.inspectedDoorDto.otherDoor);
 
         // 🔧🔧🔧 BEGIN: copy physical action fields into flat formData keys + photos into actionImages
         const pm = data.physicalMeasurement ?? {};
@@ -807,8 +1198,7 @@ setIsView(modeNorm !== "edit");
           physAI[k] = Array.isArray(src.photos) ? src.photos : [];
         });
         // 🔧🔧🔧 END
-        setActionImages(physAI); // ✅ now FormComponent gets actionImages.<field>
-
+        // setActionImages(physAI); // ✅ now FormComponent gets actionImages.<field>
         setFormData(fd);
 
         setBasicFormData({
@@ -858,6 +1248,8 @@ setIsView(modeNorm !== "edit");
         });
 
         setComplianceCheck(cc);
+        setActionImages({ ...physAI, ...ai });
+
         // setActionImages(ai);
         setDoorTypesOption(property.doorTypes);
         setFloorPlanImages([data.inspectedPropertyFloorsInfo.floorPlanImage]);
@@ -872,7 +1264,6 @@ setIsView(modeNorm !== "edit");
         setIsLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
@@ -930,11 +1321,13 @@ setIsView(modeNorm !== "edit");
           // isGlazing={isGlazing}
           // isFireKeepLocked={fireKeepLocked}
           ShowScanQRCode={false}
-          doorOtherFlag={(formData as any).doorType === "99"}
+          doorOtherFlag={doorOtherFlag}
+          // doorOtherFlag={(formData as any).doorType === "99"}
           doorTypesOption={doorTypesOption}
           validationFlag={validationFlag}
           isLoading={isLoading}
           mandatoryFieldRef={mandatoryFieldRef}
+          errors={errors}
           handleChange={handleChange}
           handleFormDataChange={handleFormDataChange}
           handleGapsChange={() => {}}
@@ -945,16 +1338,17 @@ setIsView(modeNorm !== "edit");
           handleImagesChangeMini={handleImagesChangeMini}
           handleDeleteImages={handleDeleteImages}
           // handleResetAction={(key: string) => handleResetAction(key)}
-          handleActionFieldsChange={(key: string, type: string, value: string) =>
-  handleActionFieldsChange(key, type, value)
-}
-
+          handleActionFieldsChange={(
+            key: string,
+            type: string,
+            value: string
+          ) => handleActionFieldsChange(key, type, value)}
           handleFireResistanceChange={() => {}}
           generateQRCode={() => {}}
           setShowScanQRCode={() => {}}
           handleCancel={handleCancel}
           handleSubmit={handleSubmit}
-          handleValidationOnSave={handleValidationOnSave}
+          handleValidationOnSave={validateRequired}
           // handleComplianceActionFieldsChange={handleComplianceActionFieldsChange}
         />
       </ScrollView>
