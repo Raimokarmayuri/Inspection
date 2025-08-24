@@ -139,24 +139,6 @@ const PropertyDetailsScreen = () => {
 
 
 
-
-  // const submitForApproval = async () => {
-  //   try {
-  //     await http.put(
-  //       `${UPDATE_PROPERTY_USER_MAPPING_STATUS}${propertyUserRoleMappingId}`,
-  //       {
-  //         propertyUserRoleMappingId,
-  //         status: Statuses.COMPLETED,
-  //         propertyMasterId: propertyId,
-  //       }
-  //     );
-  //     Alert.alert("Success", "Survey submitted for approval");
-  //     navigation.goBack();
-  //   } catch (err) {
-  //     Alert.alert("Error", "Submission failed");
-  //   }
-  // };
-
    // 📌 From your JS code
   const onSubmitForApproval = () => {
     setShowConfirmBox(true);
@@ -327,6 +309,49 @@ const canDownload = canAdminOrApproverDownload || canInspectorDownload;
 
   if (loading)
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
+
+
+  const mapDoor = (item: any) => {
+  // try multiple fields your backend might use
+  const candidate =
+    item.isCompliant ??
+    item.compliance ??
+    item.complianceStatus ??
+    item.status ??
+    item.inspectionStatus ??
+    "";
+
+  // try a few likely “critical” flags your backend might use
+  const isCritical =
+    item.isCritical ??
+    item.critical ??
+    item.hasCriticalNonCompliance ??
+    item.criticalNonCompliance ??
+    false;
+
+  // build a friendly string that your table can render
+  let complianceDisplay: string;
+  if (isCritical === true) {
+    complianceDisplay = "Non-Compliant: Critical";
+  } else if (typeof candidate === "boolean") {
+    complianceDisplay = candidate ? "Compliant" : "Non-Compliant";
+  } else {
+    const s = String(candidate).trim();
+    complianceDisplay = s || "-";
+  }
+
+  return {
+    doorRefNumber: item.doorRefNumber,
+    doorType: item.doorType,
+    fireRating: item.fireRating || "-",
+    // 👉 send BOTH a display string and the raw candidate
+    compliance: complianceDisplay,
+    isCompliant: candidate,
+    comments: item.comments,
+    propertyMasterId: propertyId,
+  };
+};
+
 
   return (
     <>
@@ -509,17 +534,21 @@ const canDownload = canAdminOrApproverDownload || canInspectorDownload;
                   <ScrollView horizontal showsHorizontalScrollIndicator={true}>
                     <View style={{ minWidth: 700 }}>
                       <DataGridTable
-                        tableData={paginatedDoorDetails.map((item: any) => ({
-                          doorRefNumber: item.doorRefNumber,
-                          doorType: item.doorType,
-                          fireRating: item.fireRating || "-",
-                          compliance: item.isCompliant,
-                          comments: item.comments,
-                          propertyMasterId: propertyId,
-                        }))}
-                        userRole={userRole}
-                        inspectorInspectionStatus={inspectorInspectionStatus}
-                        propertyInfo={propertyInfo}
+                        // tableData={paginatedDoorDetails.map((item: any) => ({
+                        //   doorRefNumber: item.doorRefNumber,
+                        //   doorType: item.doorType,
+                        //   fireRating: item.fireRating || "-",
+                        //   compliance: item.isCompliant,
+                        //   comments: item.comments,
+                        //   propertyMasterId: propertyId,
+                        // }))}
+                        // userRole={userRole}
+                        // inspectorInspectionStatus={inspectorInspectionStatus}
+                        // propertyInfo={propertyInfo}
+                        tableData={paginatedDoorDetails.map(mapDoor)}
+  userRole={userRole}
+  inspectorInspectionStatus={inspectorInspectionStatus}
+  propertyInfo={propertyInfo}
                       />
                     </View>
                   </ScrollView>

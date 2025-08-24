@@ -18,7 +18,8 @@ interface TableRowData {
   doorRefNumber: string;
   doorType: string;
   fireRating: string;
-  compliance: string;
+  compliance: string | boolean | number | null;
+  isCompliant?: boolean | string | number; // <- add this
   comments?: string;
   id: number;
   propertyMasterId?: string;
@@ -75,8 +76,8 @@ export default function DataGridTable({
     { key: "doorRefNumber", label: "Door Ref", visible: true, width: 160 },
     { key: "doorType", label: "Type", visible: true, width: 120 },
     { key: "fireRating", label: "Fire", visible: true, width: 100 },
-    { key: "compliance", label: "Compliance", visible: true, width: 140 },
-    { key: "comments", label: "Comments", visible: true, width: 220 },
+    { key: "compliance", label: "Compliance", visible: true, width: 180 },
+    { key: "comments", label: "Comments", visible: true, width: 180 },
   ]);
   const visibleColumns = columns.filter((c) => c.visible);
 
@@ -710,10 +711,11 @@ const styles = StyleSheet.create({
 
   headerCell: {
     paddingHorizontal: 8,
+    backgroundColor: "#4caf50",
     justifyContent: "center",
     minHeight: ROW_MIN_HEIGHT,
   },
-  headerText: { fontWeight: "bold" },
+  headerText: { fontWeight: "bold", color: "#fff" },
 
   cellWrap: {
     paddingHorizontal: 8,
