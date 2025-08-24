@@ -71,6 +71,7 @@ export interface FormData {
   doorNumber: string;
   doorType: string;
   doorOther: string;
+   doorTypeName?: string;
   doorPhoto: string[];
   fireResistance: string;
   head: string;

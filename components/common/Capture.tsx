@@ -290,6 +290,9 @@
 
 
 
+
+
+
 import * as ImagePicker from "expo-image-picker";
 import React, { ChangeEvent, useEffect, useState } from "react";
 import {
@@ -510,20 +513,27 @@ const captureImage = async () => {
   }
 };
 
+// const removeImage = (index: number) => {
+//   const next = capturedImages.filter((_, i) => i !== index);
+//   console.log("[Capture] removeImage()", {
+//     fieldValue,
+//     removeIndex: index,
+//     before: capturedImages.length,
+//     after: next.length,
+//   });
+//   // IMPORTANT: keep local state in sync…
+//   setCapturedImages(next);
+//   // …and let the parent do the authoritative removal:
+//   onImageDelete(index);
+// };
+
 const removeImage = (index: number) => {
-  const next = capturedImages.filter((_, i) => i !== index);
-  console.log("[Capture] removeImage()", {
-    fieldValue,
-    removeIndex: index,
-    before: capturedImages.length,
-    after: next.length,
-  });
-  // IMPORTANT: keep local state in sync…
-  setCapturedImages(next);
-  // …and let the parent do the authoritative removal:
+  // Do NOT change local state here.
+  // Ask parent to confirm; parent will either:
+  //  - cancel → leave images untouched, or
+  //  - confirm → update its state, which will flow back via `savedImages`.
   onImageDelete(index);
 };
-
 
   return (
     <View style={styles.container}>

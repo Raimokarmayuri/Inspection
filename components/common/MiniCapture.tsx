@@ -3,6 +3,8 @@ import React, { useMemo } from "react";
 import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import Capture from "./Capture";
 
+type MiniField = "Severity" | "Category" | "Remediation" | "Comment" | "DueDate" | "Images";
+
 interface MiniCaptureProps {
   isView: boolean;
   savedImages: string[];

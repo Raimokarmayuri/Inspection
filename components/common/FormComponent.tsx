@@ -1,6 +1,6 @@
 import { Picker } from "@react-native-picker/picker";
 import { useNavigation } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import Footer from "../common/Footer";
 import { hostName } from "../config/config";
 import {
@@ -21,6 +22,7 @@ import {
   FormData,
 } from "../types";
 import Capture from "./Capture";
+import ConfirmationPopup from "./ConfirmationPopup";
 import MiniCapture from "./MiniCapture";
 
 type FieldKey =
@@ -34,6 +36,8 @@ type FieldKey =
 
 interface FormProps {
   isView: boolean;
+  requiredComplianceMap?: Record<string, boolean>;
+  requiredMap?: Record<string, boolean>;
   basicFormData: BasicFormData;
   formData: FormData;
   doorPhoto: string[];
@@ -50,7 +54,9 @@ interface FormProps {
   doorTypesOption: { doorTypeId: number; doorTypeName: string }[];
   validationFlag: boolean;
   isLoading: boolean;
-  errors?: Partial<Record<FieldKey, string>>;
+  // errors?: Partial<Record<FieldKey, string>>;
+  errors?: Record<string, string>;
+
   mandatoryFieldRef: React.MutableRefObject<Record<string, TextInput | null>>;
 
   handleChange: (field: string, value: string) => void;
@@ -90,7 +96,7 @@ interface FormProps {
   handleCancel: () => void;
   handleSubmit: (status?: string) => Promise<void>;
 
-  handleValidationOnSave: (status: string) => void;
+  handleValidationOnSave: (status: string) => Promise<void>;
 }
 
 const hingeMap: Record<string, string> = { "1": "Left", "2": "Right" };
@@ -122,6 +128,8 @@ const FormComponent: React.FC<FormProps> = ({
   basicFormData,
   formData,
   complianceCheck,
+  requiredComplianceMap,
+  requiredMap,
   actionmenuFlag, // (not used here, but kept for prop compatibility)
   actionImages,
   floorPlanImages,
@@ -156,10 +164,97 @@ const FormComponent: React.FC<FormProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const showFloorErr = !!errors?.floor && validationFlag;
 
+  //   const confirmDeleteImage = (index: number, field: string) => {
+  //   Alert.alert(
+  //     "Delete image?",
+  //     "This will remove the photo from this record.",
+  //     [
+  //       { text: "Cancel", style: "cancel" },
+  //       { text: "Delete", style: "destructive", onPress: () => handleDeleteImages(index, field) },
+  //     ]
+  //   );
+  // };
+
+const [confirm, setConfirm] = useState<{
+  visible: boolean;
+  index: number | null;
+  field: string | null;
+}>({ visible: false, index: null, field: null });
+
+
+
+  const confirmDeleteImage = (index: number, field: string) => {
+    setConfirm({ visible: true, index, field });
+  };
+
+  // KEEP: just close the popup, do nothing with images
+const keepImage = () =>
+    setConfirm({ visible: false, index: null, field: null });
+
+
+
+  const confirmDelete = () => {
+    if (confirm.index != null && confirm.field) {
+    handleDeleteImages(confirm.index, confirm.field);
+  }
+  keepImage();
+  };
+
+  // helper to render red alert box below a field
+  const renderFieldError = (fieldKey: string) => {
+    if (!validationFlag) return null;
+    const msg = errors?.[fieldKey as FieldKey];
+    if (!msg) return null;
+    return (
+      <View style={styles.alertBox}>
+        <Text style={styles.alertText}>{msg}</Text>
+      </View>
+    );
+  };
+
   const showDoorTypeErr = !!errors?.doorType && validationFlag;
   const showDoorOtherErr = !!errors?.doorOther && validationFlag;
   const showFireErr = !!errors?.fireResistance && validationFlag;
   const showHingeErr = !!errors?.hingeLocation && validationFlag;
+
+  // 1) Pick the best incoming value from formData (whatever the API used)
+  // ---- pick the best incoming value from formData ----
+  // ---- gather any incoming custom value from formData once
+const incomingOtherDoor = React.useMemo(() => {
+  const keys = ["doorOther", "otherDoorTypeName", "otherDoorType", "doorTypeOther"];
+  for (const k of keys) {
+    const v = (formData as any)?.[k];
+    if (typeof v === "string" && v.trim()) return v.trim(); // trims "Etra "
+  }
+  return "";
+}, [formData]);
+
+const [otherDoorLocal, setOtherDoorLocal] = React.useState("");
+
+// hydrate once when API value arrives
+React.useEffect(() => {
+  if (!otherDoorLocal && incomingOtherDoor) setOtherDoorLocal(incomingOtherDoor);
+}, [incomingOtherDoor]);
+
+const looksLikeOther = React.useMemo(() => {
+  const name = getDoorTypeName(formData?.doorType, doorTypesOption) || "";
+  return /(^|[^a-z])other([^a-z]|$)/i.test(name);
+}, [formData?.doorType, doorTypesOption]);
+
+// ✅ show if flag OR picker says "Other" OR we already have a saved custom value
+const shouldShowOtherDoor = doorOtherFlag || looksLikeOther || !!incomingOtherDoor;
+
+  // ---- show the "Other Door Type" field if ANY of these are true
+  // const shouldShowOtherDoor =
+  //   doorOtherFlag ||
+  //   looksLikeOther ||
+  //   !!(otherDoorLocal || incomingOtherDoor).trim();
+
+  // detect "Other" reliably
+  const isDoorTypeOther = React.useMemo(() => {
+    const name = getDoorTypeName(formData?.doorType, doorTypesOption) || "";
+    return /(^|[^a-z])other([^a-z]|$)/i.test(name);
+  }, [formData?.doorType, doorTypesOption]);
 
   // Use whatever the server gave us first, then our local field
   // try multiple likely keys from the API payload
@@ -173,18 +268,10 @@ const FormComponent: React.FC<FormProps> = ({
       .map((v) => (typeof v === "string" ? v.trim() : ""))
       .find(Boolean) || "";
 
-  const isDoorTypeOther = useMemo(() => {
-    const selectedName = (
-      getDoorTypeName(formData?.doorType, doorTypesOption) || ""
-    )
-      .trim()
-      .toLowerCase();
-
-    const looksLikeOther = selectedName.includes("other");
-    const hasCustom = doorOtherValue.length > 0;
-
-    return looksLikeOther || hasCustom;
-  }, [formData?.doorType, doorTypesOption, doorOtherValue]);
+  // const isDoorTypeOther = React.useMemo(() => {
+  //   const name = (getDoorTypeName(formData?.doorType, doorTypesOption) || "");
+  //   return /(^|[^a-z])other([^a-z]|$)/i.test(name);
+  // }, [formData?.doorType, doorTypesOption]);
 
   // ---------- PHYSICAL MiniCapture helpers ----------
   const getImagesForField = (field: string) => {
@@ -219,22 +306,28 @@ const FormComponent: React.FC<FormProps> = ({
     return Number.isFinite(n) ? n : NaN;
   };
 
-  const PHYSICAL_ACTION_FIELDS = new Set(["head", "hinge", "closing", "threshold"]);
-
+  const PHYSICAL_ACTION_FIELDS = new Set([
+    "head",
+    "hinge",
+    "closing",
+    "threshold",
+  ]);
 
   const shouldShowMini = (field: string) => {
-  // Only these 4 fields ever show an action block
-  if (!PHYSICAL_ACTION_FIELDS.has(field)) return false;
+    // Only these 4 fields ever show an action block
+    if (!PHYSICAL_ACTION_FIELDS.has(field)) return false;
 
-  const val = getNum((formData as any)[field]);
+    const val = getNum((formData as any)[field]);
 
-  // Edit mode: only when value > 3
-  if (!isView) return Number.isFinite(val) && val > ACTION_THRESHOLD;
+    // Edit mode: only when value > 3
+    if (!isView) return Number.isFinite(val) && val > ACTION_THRESHOLD;
 
-  // View mode: show if there is saved action data OR value > 3 (so past actions are visible)
-  return hasActionDataFor(field) || (Number.isFinite(val) && val > ACTION_THRESHOLD);
-};
-
+    // View mode: show if there is saved action data OR value > 3 (so past actions are visible)
+    return (
+      hasActionDataFor(field) ||
+      (Number.isFinite(val) && val > ACTION_THRESHOLD)
+    );
+  };
 
   // ---------- COMPLIANCE MiniCapture helpers ----------
   const getComplianceImages = (
@@ -378,15 +471,17 @@ const FormComponent: React.FC<FormProps> = ({
             formData={complianceCheck as any}
             savedImages={getComplianceImages(keyName)}
             onImagesChange={(images) => handleImagesChangeMini(images, keyName)}
-            onImageDelete={(index) => handleDeleteImages(index, keyName)}
+            // onImageDelete={(index) => handleDeleteImages(index, keyName)}
+            onImageDelete={(index) => confirmDeleteImage(index, keyName)}
             onResetChange={() => handleResetAction(keyName, "COMPLIANCE")}
             onHandleActionFieldsChange={(val, type) =>
               handleComplianceActionFieldsChange(keyName, type, val)
             }
             reset={resetCaptureFlag}
             mandatoryFieldRef={mandatoryFieldRef}
-            // 👇 this is the important part
             forceShow={!isView && (showMiniBecauseNo || hasData)}
+            /** 👇 THIS makes MiniCapture show its Severity/Category/Due/Remediation errors */
+            showErrors={validationFlag}
           />
         )}
       </>
@@ -439,6 +534,7 @@ const FormComponent: React.FC<FormProps> = ({
                 mandatoryFieldRef.current.floor = el;
             }}
           />
+          {/* {renderFieldError("floor")} */}
           {showFloorErr && (
             <Text style={styles.errorText}>{errors?.floor}</Text>
           )}
@@ -450,11 +546,13 @@ const FormComponent: React.FC<FormProps> = ({
               savedImages={basicFormData.floorPlan}
               onImagesChange={(images) => handleImagesChange(images, "Floor")}
               reset={resetCaptureFlag}
-              onImageDelete={(index) => handleDeleteImages(index, "Floor")}
+              // onImageDelete={(index) => handleDeleteImages(index, "Floor")}
+              onImageDelete={(index) => confirmDeleteImage(index, "Floor")}
               mandatoryFieldRef={mandatoryFieldRef}
               fieldValue={"floorFile"}
               singleImageCapture
             />
+            {renderFieldError("floorPlan")}
           </View>
 
           <Text style={styles.label}>Door Number</Text>
@@ -465,87 +563,78 @@ const FormComponent: React.FC<FormProps> = ({
           />
 
           <Text style={styles.label}>Door Type</Text>
-          {isView ? (
-            <Text style={styles.readOnlyValue}>
-              {isDoorTypeOther
-                ? `Other — ${doorOtherValue || "—"}`
-                : getDoorTypeName(formData?.doorType, doorTypesOption) || "—"}
-            </Text>
-          ) : (
-            <View
-              style={[
-                styles.pickerWrap,
-                showDoorTypeErr && styles.pickerWrapError,
-              ]}
-            >
-              <Picker
-                key={`doorType-${isView ? "view" : "edit"}`}
-                selectedValue={String(formData?.doorType ?? "")}
-                onValueChange={(value) =>
-                  handleFormDataChange("doorType", value)
-                }
-                dropdownIconColor="#034694"
-                style={styles.picker}
-              >
-                <Picker.Item label="Select" value="" color="#999" />
-                {doorTypesOption.map((type) => (
-                  <Picker.Item
-                    key={type.doorTypeId}
-                    label={type.doorTypeName}
-                    value={String(type.doorTypeId)}
-                    color="#034694"
-                  />
-                ))}
-              </Picker>
-            </View>
-          )}
-          {showDoorTypeErr && (
-            <Text style={styles.errorText}>{errors?.doorType}</Text>
-          )}
+{isView ? (
+  <Text style={styles.readOnlyValue}>
+    {shouldShowOtherDoor
+      ? (otherDoorLocal || incomingOtherDoor ? `Other — ${(otherDoorLocal || incomingOtherDoor)}` : "Other")
+      : (getDoorTypeName(String(formData?.doorType ?? ""), doorTypesOption)|| "—")}
+  </Text>
+) : (
+  <View style={[styles.pickerWrap, showDoorTypeErr && styles.pickerWrapError]}>
+    <Picker
+      key={`doorType-${isView ? "view" : "edit"}`}
+      selectedValue={String(formData?.doorType ?? "")}
+  onValueChange={(val) => handleFormDataChange("doorType", String(val))}
+      dropdownIconColor="#034694"
+      style={styles.picker}
+    >
+      <Picker.Item label="Select" value="" color="#999" />
+      {doorTypesOption.map((type) => (
+        <Picker.Item
+          key={type.doorTypeId}
+          label={type.doorTypeName}
+          value={String(type.doorTypeId)}
+          color="#034694"
+        />
+      ))}
+    </Picker>
+    {renderFieldError("doorType")}
+  </View>
+)}
 
-          {(doorOtherFlag || isDoorTypeOther) && (
-            <>
-              <Text style={styles.label}>Other Door Type</Text>
-              <TextInput
-                style={[styles.input, showDoorOtherErr && styles.inputError]}
-                value={doorOtherValue}
-                editable={!isView}
-                onChangeText={(text) => {
-                  handleFormDataChange("doorOther", text);
-                  handleFormDataChange("otherDoorTypeName" as any, text);
-                  handleFormDataChange("otherDoorType" as any, text);
-                  handleFormDataChange("doorTypeOther" as any, text);
-                }}
-                ref={(el) => {
-                  if (mandatoryFieldRef?.current)
-                    mandatoryFieldRef.current.doorOther = el;
-                }}
-              />
-              {showDoorOtherErr && (
-                <Text style={styles.errorText}>{errors?.doorOther}</Text>
-              )}
-            </>
-          )}
+{shouldShowOtherDoor && (
+  <>
+    <Text style={styles.label}>Other Door Type</Text>
+    <TextInput
+      style={[styles.input, showDoorOtherErr && styles.inputError]}
+      value={otherDoorLocal}
+      editable={!isView}
+      onChangeText={(text) => {
+        setOtherDoorLocal(text); // local UI
+        // keep all backend variants in sync
+        handleFormDataChange("doorOther", text);
+        handleFormDataChange("otherDoorTypeName" as any, text);
+        handleFormDataChange("otherDoorType" as any, text);
+        handleFormDataChange("doorTypeOther" as any, text);
+      }}
+      ref={(el) => { if (mandatoryFieldRef?.current) mandatoryFieldRef.current.doorOther = el; }}
+    />
+    {renderFieldError("doorOther")}
+  </>
+)}
+
+
 
           <View style={styles.imageSection}>
             <Text style={styles.label}>Door Photo</Text>
             <Capture
-  isView={isView}
-  savedImages={formData.doorPhoto}
-  onImagesChange={(images) => {
-    console.log("[FC] Door onImagesChange ->", images.length);
-    handleImagesChange(images, "Door");
-  }}
-  onImageDelete={(index) => {
-    console.log("[FC] Door onImageDelete ->", index);
-    handleDeleteImages(index, "Door");
-  }}
-  reset={resetCaptureFlag}
-  mandatoryFieldRef={mandatoryFieldRef}
-  fieldValue="doorFile"
-  singleImageCapture
-/>
-
+              isView={isView}
+              savedImages={formData.doorPhoto}
+              onImagesChange={(images) => {
+                console.log("[FC] Door onImagesChange ->", images.length);
+                handleImagesChange(images, "Door");
+              }}
+              // onImageDelete={(index) => {
+              //   console.log("[FC] Door onImageDelete ->", index);
+              //   handleDeleteImages(index, "Door");
+              // }}
+              onImageDelete={(index) => confirmDeleteImage(index, "Door")}
+              reset={resetCaptureFlag}
+              mandatoryFieldRef={mandatoryFieldRef}
+              fieldValue="doorFile"
+              singleImageCapture
+            />
+            {renderFieldError("doorPhoto")}
           </View>
 
           <Text style={styles.label}>Fire Rating and Certification*</Text>
@@ -578,6 +667,7 @@ const FormComponent: React.FC<FormProps> = ({
               </Picker>
             </View>
           )}
+          {/* {renderFieldError("fireResistance")} */}
           {showFireErr && (
             <Text style={styles.errorText}>{errors?.fireResistance}</Text>
           )}
@@ -617,9 +707,11 @@ const FormComponent: React.FC<FormProps> = ({
               onHandleActionFieldsChange={(val, type) =>
                 handleActionFieldsChange("head", type, val)
               }
-              onImageDelete={(index) => handleDeleteImages(index, "head")}
+              // onImageDelete={(index) => handleDeleteImages(index, "head")}
+              onImageDelete={(index) => confirmDeleteImage(index, "head")}
               reset={resetCaptureFlag}
               mandatoryFieldRef={mandatoryFieldRef}
+              showErrors={validationFlag}
             />
           )}
 
@@ -651,6 +743,7 @@ const FormComponent: React.FC<FormProps> = ({
               </Picker>
             </View>
           )}
+          {/* {renderFieldError("hingeLocation")} */}
           {showHingeErr && (
             <Text style={styles.errorText}>{errors?.hingeLocation}</Text>
           )}
@@ -663,40 +756,55 @@ const FormComponent: React.FC<FormProps> = ({
             "frameDepth",
             "doorSize",
             "fullDoorsetSize",
-          ].map((field) => (
-            <View key={field}>
-              <Text style={styles.label}>
-                {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
-              </Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={String((formData as any)[field] ?? "")}
-                editable={!isView}
-                onChangeText={(text) => handleFormDataChange(field, text)}
-              />
-
-              {shouldShowMini(field) && (
-                <MiniCapture
-                  key={`mc-${isView ? "view" : "edit"}-${field}`}
-                  isView={isView}
-                  fieldValue={field}
-                  formData={formData}
-                  savedImages={getImagesForField(field)}
-                  onImagesChange={(images) =>
-                    handleImagesChangeMini(images, field)
-                  }
-                  onResetChange={() => handleResetAction(field, "PHYSICAL")}
-                  onHandleActionFieldsChange={(val, type) =>
-                    handleActionFieldsChange(field, type, val)
-                  }
-                  onImageDelete={(index) => handleDeleteImages(index, field)}
-                  reset={resetCaptureFlag}
-                  mandatoryFieldRef={mandatoryFieldRef}
+          ].map((field) => {
+            const hasErr = validationFlag && !!errors?.[field];
+            return (
+              <View key={field}>
+                <Text style={styles.label}>
+                  {field.charAt(0).toUpperCase() + field.slice(1)} (mm)
+                </Text>
+                <TextInput
+                  style={[styles.input, hasErr && styles.inputError]}
+                  keyboardType="numeric"
+                  value={String((formData as any)[field] ?? "")}
+                  editable={!isView}
+                  onChangeText={(text) => handleFormDataChange(field, text)}
                 />
-              )}
-            </View>
-          ))}
+
+                {/* 👇 base field error message */}
+                {renderFieldError(field)}
+
+                {shouldShowMini(field) && (
+                  <MiniCapture
+                    key={`mc-${isView ? "view" : "edit"}-${field}`}
+                    isView={isView}
+                    fieldValue={field}
+                    formData={formData}
+                    savedImages={getImagesForField(field)}
+                    onImagesChange={(images) =>
+                      handleImagesChangeMini(images, field)
+                    }
+                    onResetChange={() => handleResetAction(field, "PHYSICAL")}
+                    onHandleActionFieldsChange={(val, type) =>
+                      handleActionFieldsChange(field, type, val)
+                    }
+                    // onImageDelete={(index) => handleDeleteImages(index, field)}
+                    onImageDelete={(index) => confirmDeleteImage(index, field)}
+                    reset={resetCaptureFlag}
+                    mandatoryFieldRef={mandatoryFieldRef}
+                    showErrors={validationFlag}
+                  />
+                )}
+
+                {/* If you also want the action-field errors here (optional; MiniCapture already shows them) */}
+                {/* {renderFieldError(`${field}Severity`)}
+      {renderFieldError(`${field}Category`)}
+      {renderFieldError(`${field}Remediation`)}
+      {renderFieldError(`${field}DueDate`)}
+      {renderFieldError(`${field}Images`)} */}
+              </View>
+            );
+          })}
 
           <Text style={styles.sectionTitle}>Compliance Check</Text>
 
@@ -750,7 +858,8 @@ const FormComponent: React.FC<FormProps> = ({
                 handleImagesChange(images, "Additional")
               }
               reset={resetCaptureFlag}
-              onImageDelete={(index) => handleDeleteImages(index, "Additional")}
+              // onImageDelete={(index) => handleDeleteImages(index, "Additional")}
+              onImageDelete={(index) => confirmDeleteImage(index, "Additional")}
               mandatoryFieldRef={mandatoryFieldRef}
               fieldValue={"additionalPhotos"}
               singleImageCapture={false}
@@ -792,20 +901,18 @@ const FormComponent: React.FC<FormProps> = ({
             </View>
           </View>
         </View>
-
-       
       </ScrollView>
 
-       {!isView && (
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              padding: 10,
-              // marginTop: 20,
-            }}
-          >
-            {/* <TouchableOpacity
+      {!isView && (
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            padding: 10,
+            // marginTop: 20,
+          }}
+        >
+          {/* <TouchableOpacity
                 style={{
                   backgroundColor: "#ffffff",
                   paddingVertical: 14,
@@ -831,47 +938,9 @@ const FormComponent: React.FC<FormProps> = ({
                 </Text>
               </TouchableOpacity> */}
 
-            <TouchableOpacity
-              style={{
-                backgroundColor: "#ffffff",
-                paddingVertical: 14,
-                borderRadius: 8,
-                alignItems: "center",
-                justifyContent: "center",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 2,
-                elevation: 2,
-                borderWidth: 1,
-                borderColor: "#000000",
-                flex: 1, // equal space
-                marginRight: 8, // gap between buttons
-              }}
-              onPress={() => {
-                setSubmitting(true);
-                handleValidationOnSave("Compliant"); // ✅ runs validateRequired() and only submits if valid
-                setSubmitting(false);
-              }}
-              disabled={submitting}
-            >
-              <Text
-                style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}
-              >
-                {submitting ? "Submitting..." : "Submit"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          // onPress={handleCancel}
-          style={[
-            {
+          <TouchableOpacity
+            style={{
               backgroundColor: "#ffffff",
-              marginTop: 30,
-              marginBottom: 20,
               paddingVertical: 14,
               borderRadius: 8,
               alignItems: "center",
@@ -883,14 +952,66 @@ const FormComponent: React.FC<FormProps> = ({
               elevation: 2,
               borderWidth: 1,
               borderColor: "#000000",
-            },
-          ]}
-        >
-          <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
-            Back
-          </Text>
-        </TouchableOpacity>
-        <Footer />
+              flex: 1, // equal space
+              marginRight: 8, // gap between buttons
+            }}
+            onPress={async () => {
+              try {
+                setSubmitting(true);
+                await handleValidationOnSave("Compliant");
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+            // onPress={() => {
+            //   setSubmitting(true);
+            //   handleValidationOnSave("Compliant"); // ✅ runs validateRequired() and only submits if valid
+            //   setSubmitting(false);
+            // }}
+            disabled={submitting}
+          >
+            <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
+              {submitting ? "Submitting..." : "Submit"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={[
+          {
+            backgroundColor: "#ffffff",
+            marginTop: 30,
+            marginBottom: 20,
+            paddingVertical: 14,
+            borderRadius: 8,
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 2,
+            elevation: 2,
+            borderWidth: 1,
+            borderColor: "#000000",
+          },
+        ]}
+      >
+        <Text style={{ color: "#000000", fontSize: 16, fontWeight: "600" }}>
+          Back
+        </Text>
+      </TouchableOpacity>
+      <ConfirmationPopup
+        visible={confirm.visible}
+        title="Delete image?"
+        message="This will remove the photo from this record."
+        cancelText="cancel"
+        confirmText="Delete"
+          onCancel={keepImage}     
+        onConfirm={confirmDelete}
+      />
+      <Footer />
     </SafeAreaView>
   );
 };
@@ -948,6 +1069,19 @@ const styles = StyleSheet.create({
     color: "#034694",
     fontSize: 16,
   },
+  alertBox: {
+    // backgroundColor: "#f8d7da",
+    // borderColor: "#fcf8f9ff",
+    // borderWidth: 1,
+    // borderRadius: 6,
+    // padding: 8,
+    // marginTop: 4,
+  },
+  alertText: {
+    color: "#fa2e42ff",
+    fontSize: 13,
+  },
+
   card: {
     backgroundColor: "#fff",
     borderRadius: 8,

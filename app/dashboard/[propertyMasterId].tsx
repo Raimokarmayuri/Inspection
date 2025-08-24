@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 
+import ConfirmationPopup from "@/components/common/ConfirmationPopup";
 import * as FileSystem from "expo-file-system";
 import * as Print from "expo-print";
 import { useSelector } from "react-redux";
@@ -223,6 +224,34 @@ const Dashboard = () => {
       // fetchPropertyData();
     }
   }, [userObj, propertyMasterId]);
+
+
+  
+  const [confirm, setConfirm] = useState<{
+    visible: boolean;
+    index: number | null;
+    field: string | null;
+  }>({ visible: false, index: null, field: null });
+  
+  
+  
+    const confirmDeleteImage = (index: number, field: string) => {
+      setConfirm({ visible: true, index, field });
+    };
+  
+    // KEEP: just close the popup, do nothing with images
+  const keepImage = () =>
+      setConfirm({ visible: false, index: null, field: null });
+  
+  
+  
+    const confirmDelete = () => {
+      if (confirm.index != null && confirm.field) {
+      handleDeleteImages(confirm.index, confirm.field);
+    }
+    keepImage();
+    };
+
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -1272,7 +1301,9 @@ const collectMiniCaptureMissing = (): string[] => {
           <Capture
             onImagesChange={(images) => handleImagesChange(images, "Floor")}
             reset={resetCaptureFlag}
-            onImageDelete={(index) => handleDeleteImages(index, "Floor")}
+            // onImageDelete={(index) => handleDeleteImages(index, "Floor")}
+                          onImageDelete={(index) => confirmDeleteImage(index, "Floor")}
+
             fieldValue="floorFile"
             singleImageCapture={true}
             isView={false}
@@ -1356,7 +1387,7 @@ const collectMiniCaptureMissing = (): string[] => {
           <Capture
             onImagesChange={(images) => handleImagesChange(images, "Door")}
             reset={resetCaptureFlag}
-            onImageDelete={(index) => handleDeleteImages(index, "Door")}
+            onImageDelete={(index) => confirmDeleteImage(index, "Door")}
             fieldValue="doorFile"
             singleImageCapture
             isView={false}
@@ -1519,7 +1550,7 @@ const collectMiniCaptureMissing = (): string[] => {
                           "PHYSICAL"
                         )
                       }
-                      onImageDelete={(index) => handleDeleteImages(index, key)}
+                      onImageDelete={(index) => confirmDeleteImage(index, key)}
                       reset={resetCaptureFlag}
                       mandatoryFieldRef={mandatoryFieldRef}
                       isView={false}
@@ -1709,7 +1740,7 @@ let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
                             handleImagesChangeMini(images, key)
                           }
                           onImageDelete={(index: number) =>
-                            handleDeleteImages(index, key)
+                            confirmDeleteImage(index, key)
                           }
                           onResetChange={() =>
                             handleResetAction(key, "COMPLIANCE")
@@ -1755,7 +1786,7 @@ let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
             onImagesChange={(images) =>
               handleImagesChange(images, "Additional")
             }
-            onImageDelete={(index) => handleDeleteImages(index, "Additional")}
+            onImageDelete={(index) => confirmDeleteImage(index, "Additional")}
             reset={resetCaptureFlag}
             mandatoryFieldRef={mandatoryFieldRef}
             fieldValue="additionalFile"
@@ -1872,6 +1903,15 @@ let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
         </View>
       ) : null}
 
+<ConfirmationPopup
+        visible={confirm.visible}
+        title="Delete image?"
+        message="This will remove the photo from this record."
+        cancelText="cancel"
+        confirmText="Delete"
+          onCancel={keepImage}     
+        onConfirm={confirmDelete}
+      />
       <Footer />
     </SafeAreaView>
   );
