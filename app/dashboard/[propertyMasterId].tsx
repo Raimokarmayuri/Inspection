@@ -77,7 +77,6 @@ async function normaliseForUpload(
 
 const isHttpUrl = (u?: string) => !!u && /^https?:\/\//i.test(u);
 
-
 const Dashboard = () => {
   const route = useRoute<any>();
   const navigation = useNavigation();
@@ -181,6 +180,63 @@ const Dashboard = () => {
   const [date, setDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
 
+  const handleReset = () => {
+    // ✅ Keep these values unchanged
+    setBasicInfo((prev) => ({
+      ...prev,
+      // preserved:
+      buildingName: prev.buildingName,
+      uniqueRef: prev.uniqueRef,
+      date: prev.date,
+      location: prev.location,
+      // reset only these:
+      floor: "",
+      floorPlan: [],
+      comments: "",
+    }));
+
+    setFormData((prev) => ({
+      ...prev,
+      // preserved:
+      doorNumber: prev.doorNumber,
+      // reset only these:
+      doorType: "",
+      doorTypeName: "",
+      doorOther: "",
+      fireResistance: "",
+      head: "",
+      hingeLocation: "",
+      hinge: "",
+      closing: "",
+      threshold: "",
+      doorThickness: "",
+      frameDepth: "",
+      doorSize: "",
+      fullDoorsetSize: "",
+      compliance: "",
+      doorPhoto: [],
+    }));
+
+    setDoorOtherFlag(false);
+    setActionImages({});
+    setAdditionalImages([]);
+    setComplianceCheck(COMPLIANCE_CHECK);
+    setActionMenuFlag({
+      head: false,
+      hinge: false,
+      closing: false,
+      threshold: false,
+      doorThickness: false,
+      frameDepth: false,
+      doorSize: false,
+      fullDoorsetSize: false,
+    });
+    setErrors({});
+    setShowMiniErrors(false);
+    setQrCodeImage("");
+    setConfirm({ visible: false, index: null, field: null });
+  };
+
   const formatDate = (date: Date) => {
     // Format to DD/MM/YYYY
     const d = date.getDate().toString().padStart(2, "0");
@@ -225,33 +281,26 @@ const Dashboard = () => {
     }
   }, [userObj, propertyMasterId]);
 
-
-  
   const [confirm, setConfirm] = useState<{
     visible: boolean;
     index: number | null;
     field: string | null;
   }>({ visible: false, index: null, field: null });
-  
-  
-  
-    const confirmDeleteImage = (index: number, field: string) => {
-      setConfirm({ visible: true, index, field });
-    };
-  
-    // KEEP: just close the popup, do nothing with images
+
+  const confirmDeleteImage = (index: number, field: string) => {
+    setConfirm({ visible: true, index, field });
+  };
+
+  // KEEP: just close the popup, do nothing with images
   const keepImage = () =>
-      setConfirm({ visible: false, index: null, field: null });
-  
-  
-  
-    const confirmDelete = () => {
-      if (confirm.index != null && confirm.field) {
+    setConfirm({ visible: false, index: null, field: null });
+
+  const confirmDelete = () => {
+    if (confirm.index != null && confirm.field) {
       handleDeleteImages(confirm.index, confirm.field);
     }
     keepImage();
-    };
-
+  };
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -307,37 +356,37 @@ const Dashboard = () => {
   };
 
   const handleComplianceToggle = (name: string, value: boolean) => {
-  setComplianceCheck((prev: any) => ({ ...prev, [name]: value }));
+    setComplianceCheck((prev: any) => ({ ...prev, [name]: value }));
 
-  // doorGlazing side effect
-  if (name === "doorGlazing") setIsGlazing(value);
+    // doorGlazing side effect
+    if (name === "doorGlazing") setIsGlazing(value);
 
-  // If toggled to YES (true), nuke any action fields & photos so they don't trip validation later.
-  if (value === true) {
-    setComplianceCheck((prev) => {
-      const cleared = { ...prev };
-      const suffixes = [
-        "Timeline",
-        "Severity",
-        "Comments",
-        "Category",
-        "DueDate",
-        "Remediation",
-      ];
-      for (const s of suffixes) cleared[`${name}${s}`] = s === "Comments" ? "" : "Select";
-      return cleared;
-    });
+    // If toggled to YES (true), nuke any action fields & photos so they don't trip validation later.
+    if (value === true) {
+      setComplianceCheck((prev) => {
+        const cleared = { ...prev };
+        const suffixes = [
+          "Timeline",
+          "Severity",
+          "Comments",
+          "Category",
+          "DueDate",
+          "Remediation",
+        ];
+        for (const s of suffixes)
+          cleared[`${name}${s}`] = s === "Comments" ? "" : "Select";
+        return cleared;
+      });
 
-    // also clear saved images for that compliance item
-    setActionImages((prev) => {
-      if (!prev[name]) return prev;
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
-  }
-};
-
+      // also clear saved images for that compliance item
+      setActionImages((prev) => {
+        if (!prev[name]) return prev;
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+  };
 
   const handleFormDataChange = (name: string, value: string) => {
     if (name === "doorType") {
@@ -348,7 +397,7 @@ const Dashboard = () => {
         ...prev,
         doorType: value,
         doorTypeName: selectedName,
-         doorOther: selectedName === "Other" ? prev.doorOther : "",
+        doorOther: selectedName === "Other" ? prev.doorOther : "",
       }));
 
       setDoorOtherFlag(selectedName === "Other");
@@ -519,24 +568,23 @@ const Dashboard = () => {
     setActionMenuFlag((prev) => ({ ...prev, [name]: show }));
   };
 
-const handleImagesChangeMini = async (newImages: string[], field: string) => {
-  const prev = actionImages[field] || [];
-  const clean = (newImages || []).filter(Boolean);
-  // upload only the items that are not URLs
-  const toUpload = clean.filter((u) => !isHttpUrl(u));
-  if (toUpload.length === 0) return;
+  const handleImagesChangeMini = async (newImages: string[], field: string) => {
+    const prev = actionImages[field] || [];
+    const clean = (newImages || []).filter(Boolean);
+    // upload only the items that are not URLs
+    const toUpload = clean.filter((u) => !isHttpUrl(u));
+    if (toUpload.length === 0) return;
 
-  const uploaded = (
-    await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
-  ).filter((u) => !!u) as string[];
+    const uploaded = (
+      await Promise.all(toUpload.map((u) => uploadImageAPI([u], field)))
+    ).filter((u) => !!u) as string[];
 
-  if (uploaded.length === 0) return;
+    if (uploaded.length === 0) return;
 
-  const next = Array.from(new Set([...prev, ...uploaded]));
-  setActionImages((p) => ({ ...p, [field]: next }));
-  setFormData((p) => ({ ...p, [`${field}Images`]: next } as any));
-};
-
+    const next = Array.from(new Set([...prev, ...uploaded]));
+    setActionImages((p) => ({ ...p, [field]: next }));
+    setFormData((p) => ({ ...p, [`${field}Images`]: next } as any));
+  };
 
   const handleResetAction = (
     field: string,
@@ -789,105 +837,108 @@ const handleImagesChangeMini = async (newImages: string[], field: string) => {
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
   }
 
- const uploadImageAPI = async (
-  newImages: string[],
-  field: string
-): Promise<string> => {
-  try {
-    // 💡 Filter out falsy values and keep only the last new local/base64 item
+  const uploadImageAPI = async (
+    newImages: string[],
+    field: string
+  ): Promise<string> => {
+    try {
+      // 💡 Filter out falsy values and keep only the last new local/base64 item
+      const clean = (newImages || []).filter(Boolean);
+      const last = clean.length ? clean[clean.length - 1] : null;
+
+      if (!last) return ""; // nothing to upload
+      if (isHttpUrl(last)) return last; // already uploaded URL
+
+      const rawToken = userObj?.token ?? "";
+      if (!rawToken) {
+        console.warn("No auth token found in userObj");
+        return "";
+      }
+      const authHeader = rawToken.startsWith("Bearer ")
+        ? rawToken
+        : `Bearer ${rawToken}`;
+
+      let filePart: { uri?: string; name: string; type: string } | File | Blob;
+      let name = `${field}_Image_${Date.now()}.jpg`;
+      let type = "image/jpeg";
+
+      if (Platform.OS === "web") {
+        // last could be base64 or blob URL or local path handled by browser
+        const res = await fetch(last);
+        const blob = await res.blob();
+        type = blob.type || type;
+        filePart = new File([blob], name, { type });
+      } else {
+        // RN (Android/iOS)
+        const parts = await normaliseForUpload(last, field);
+        name = parts.name;
+        type = parts.type;
+        filePart = { uri: parts.uri, name, type } as any;
+      }
+
+      const form = new FormData();
+      form.append("File", filePart as any, name);
+      form.append("Client", "ABC");
+      form.append("Property", "Candor");
+      form.append("InspectionDate", new Date().toISOString());
+
+      const resp = await fetch(`${hostName}api/Inspection/upload`, {
+        method: "POST",
+        headers: { Authorization: authHeader }, // don't set Content-Type
+        body: form,
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        console.error("Upload failed", {
+          status: resp.status,
+          body: text?.slice(0, 300),
+        });
+        return "";
+      }
+
+      const data = await resp.json().catch(() => ({} as any));
+      return data?.result?.blobUrl || "";
+    } catch (err) {
+      console.error("uploadImageAPI error:", err);
+      return "";
+    }
+  };
+
+  const handleImagesChange = async (newImages: string[], field: string) => {
     const clean = (newImages || []).filter(Boolean);
-    const last = clean.length ? clean[clean.length - 1] : null;
+    if (clean.length === 0) return; // nothing to do
 
-    if (!last) return "";                         // nothing to upload
-    if (isHttpUrl(last)) return last;             // already uploaded URL
+    // Find the *last* item and upload only if it's not already a URL
+    const last = clean[clean.length - 1];
+    const uploadedUrl = isHttpUrl(last)
+      ? last
+      : await uploadImageAPI([last], field);
+    if (!uploadedUrl) return;
 
-    const rawToken = userObj?.token ?? "";
-    if (!rawToken) {
-      console.warn("No auth token found in userObj");
-      return "";
+    switch (field) {
+      case "Additional": {
+        setAdditionalImages((prev) => [...prev, uploadedUrl]);
+        break;
+      }
+      case "Door": {
+        setFormData((prev) => ({
+          ...prev,
+          doorPhoto: [...(prev.doorPhoto || []), uploadedUrl],
+        }));
+        break;
+      }
+      case "Floor": {
+        setBasicInfo((prev) => ({
+          ...prev,
+          floorPlan: [...(prev.floorPlan || []), uploadedUrl],
+        }));
+        break;
+      }
+      default:
+        console.warn(`Unhandled image field: ${field}`);
     }
-    const authHeader = rawToken.startsWith("Bearer ")
-      ? rawToken
-      : `Bearer ${rawToken}`;
-
-    let filePart: { uri?: string; name: string; type: string } | File | Blob;
-    let name = `${field}_Image_${Date.now()}.jpg`;
-    let type = "image/jpeg";
-
-    if (Platform.OS === "web") {
-      // last could be base64 or blob URL or local path handled by browser
-      const res = await fetch(last);
-      const blob = await res.blob();
-      type = blob.type || type;
-      filePart = new File([blob], name, { type });
-    } else {
-      // RN (Android/iOS)
-      const parts = await normaliseForUpload(last, field);
-      name = parts.name;
-      type = parts.type;
-      filePart = { uri: parts.uri, name, type } as any;
-    }
-
-    const form = new FormData();
-    form.append("File", filePart as any, name);
-    form.append("Client", "ABC");
-    form.append("Property", "Candor");
-    form.append("InspectionDate", new Date().toISOString());
-
-    const resp = await fetch(`${hostName}api/Inspection/upload`, {
-      method: "POST",
-      headers: { Authorization: authHeader }, // don't set Content-Type
-      body: form,
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      console.error("Upload failed", { status: resp.status, body: text?.slice(0, 300) });
-      return "";
-    }
-
-    const data = await resp.json().catch(() => ({} as any));
-    return data?.result?.blobUrl || "";
-  } catch (err) {
-    console.error("uploadImageAPI error:", err);
-    return "";
-  }
-};
-
-
-const handleImagesChange = async (newImages: string[], field: string) => {
-  const clean = (newImages || []).filter(Boolean);
-  if (clean.length === 0) return; // nothing to do
-
-  // Find the *last* item and upload only if it's not already a URL
-  const last = clean[clean.length - 1];
-  const uploadedUrl = isHttpUrl(last) ? last : await uploadImageAPI([last], field);
-  if (!uploadedUrl) return;
-
-  switch (field) {
-    case "Additional": {
-      setAdditionalImages((prev) => [...prev, uploadedUrl]);
-      break;
-    }
-    case "Door": {
-      setFormData((prev) => ({
-        ...prev,
-        doorPhoto: [...(prev.doorPhoto || []), uploadedUrl],
-      }));
-      break;
-    }
-    case "Floor": {
-      setBasicInfo((prev) => ({
-        ...prev,
-        floorPlan: [...(prev.floorPlan || []), uploadedUrl],
-      }));
-      break;
-    }
-    default:
-      console.warn(`Unhandled image field: ${field}`);
-  }
-};
-
+  };
 
   // nice labels for alert lines
   const LABELS: Record<string, string> = {
@@ -925,57 +976,56 @@ const handleImagesChange = async (newImages: string[], field: string) => {
   };
 
   // build one list of all missing MiniCapture requirements (physical + compliance)
- const PHYSICAL_KEYS: string[] = [
-  "head",
-  "hinge",
-  "closing",
-  "threshold",
-  "doorThickness",
-  "frameDepth",
-  "doorSize",
-  "fullDoorsetSize",
-];
+  const PHYSICAL_KEYS: string[] = [
+    "head",
+    "hinge",
+    "closing",
+    "threshold",
+    "doorThickness",
+    "frameDepth",
+    "doorSize",
+    "fullDoorsetSize",
+  ];
 
-const collectMiniCaptureMissing = (): string[] => {
-  const lines: string[] = [];
-  const title = (k: string) => LABELS[k] || k;
+  const collectMiniCaptureMissing = (): string[] => {
+    const lines: string[] = [];
+    const title = (k: string) => LABELS[k] || k;
 
-  // PHYSICAL: only check the known physical keys and only when their flag is true
-  PHYSICAL_KEYS.forEach((k) => {
-    if (actionmenuFlag[k]) {
-      const missing = requiredMiniErrorsForPrefix(formData, k);
-      if (missing.length) lines.push(`${title(k)}: ${missing.join(", ")}`);
-    }
-  });
+    // PHYSICAL: only check the known physical keys and only when their flag is true
+    PHYSICAL_KEYS.forEach((k) => {
+      if (actionmenuFlag[k]) {
+        const missing = requiredMiniErrorsForPrefix(formData, k);
+        if (missing.length) lines.push(`${title(k)}: ${missing.join(", ")}`);
+      }
+    });
 
-  // COMPLIANCE: only when toggle is NO (false) AND the item should be shown
-  const complianceCandidates = [
-    "intumescentStrips",
-    "coldSmokeSeals",
-    "fireLockedSign",
-    "fireShutSign",
-    "pyroGlazing",
-  ] as const;
+    // COMPLIANCE: only when toggle is NO (false) AND the item should be shown
+    const complianceCandidates = [
+      "intumescentStrips",
+      "coldSmokeSeals",
+      "fireLockedSign",
+      "fireShutSign",
+      "pyroGlazing",
+    ] as const;
 
-  const fireRes = String(formData.fireResistance ?? "");
-  const showColdSmoke = ["5", "6", "7"].includes(fireRes);
-  const showPyro = complianceCheck["doorGlazing"] === true;
+    const fireRes = String(formData.fireResistance ?? "");
+    const showColdSmoke = ["5", "6", "7"].includes(fireRes);
+    const showPyro = complianceCheck["doorGlazing"] === true;
 
-  complianceCandidates.forEach((key) => {
-    const shouldShow =
-      complianceCheck[key] === false &&
-      (key !== "coldSmokeSeals" || showColdSmoke) &&
-      (key !== "pyroGlazing" || showPyro);
+    complianceCandidates.forEach((key) => {
+      const shouldShow =
+        complianceCheck[key] === false &&
+        (key !== "coldSmokeSeals" || showColdSmoke) &&
+        (key !== "pyroGlazing" || showPyro);
 
-    if (shouldShow) {
-      const missing = requiredMiniErrorsForPrefix(complianceCheck, key);
-      if (missing.length) lines.push(`${title(key)}: ${missing.join(", ")}`);
-    }
-  });
+      if (shouldShow) {
+        const missing = requiredMiniErrorsForPrefix(complianceCheck, key);
+        if (missing.length) lines.push(`${title(key)}: ${missing.join(", ")}`);
+      }
+    });
 
-  return lines;
-};
-
+    return lines;
+  };
 
   const validateAndSubmit = async () => {
     const e: Record<string, string> = {};
@@ -1000,8 +1050,7 @@ const collectMiniCaptureMissing = (): string[] => {
     if (isEmpty(basicInfo.floorPlan))
       e.floorPlan = "Floor plan file is required";
     if (isEmpty(formData.doorPhoto)) e.doorPhoto = "Door photo is required";
-        // if (isEmpty(formData.doorOther)) e.doorPhoto = "DoorOther is required";
-
+    // if (isEmpty(formData.doorOther)) e.doorPhoto = "DoorOther is required";
 
     // Measurements (add/remove as needed)
     const reqMeasurements = [
@@ -1159,8 +1208,7 @@ const collectMiniCaptureMissing = (): string[] => {
           formData[`${key}Category` as keyof typeof formData] || "";
         const remediation =
           formData[`${key}Remediation` as keyof typeof formData] || "";
-        const dueDate =
-          formData[`${key}DueDate` as keyof typeof formData];
+        const dueDate = formData[`${key}DueDate` as keyof typeof formData];
         const comment =
           formData[`${key}Comments` as keyof typeof formData] || "";
 
@@ -1200,33 +1248,33 @@ const collectMiniCaptureMissing = (): string[] => {
 
       const response = await http.post(SAVE_SURVEY_FORM_DATA, payload);
 
-       if (response.status === 200 || response.status === 201) {
-      // ✅ Success message
-      Alert.alert("Success", "✅ Inspection form submitted successfully.", [
-        {
-          text: "OK",
-          onPress: () => {
-            // navigate back when OK is pressed
-            navigation.goBack();
+      if (response.status === 200 || response.status === 201) {
+        // ✅ Success message
+        Alert.alert("Success", "✅ Inspection form submitted successfully.", [
+          {
+            text: "OK",
+            onPress: () => {
+              // navigate back when OK is pressed
+              navigation.goBack();
+            },
           },
-        },
-      ]);
-    } else {
-      Alert.alert("❌ Error", "Submission failed. Try again.");
+        ]);
+      } else {
+        Alert.alert("❌ Error", "Submission failed. Try again.");
+      }
+    } catch (error: any) {
+      if (error.response?.data?.errors) {
+        console.error("🚨 Validation Errors:", error.response.data.errors);
+        const firstKey = Object.keys(error.response.data.errors)[0];
+        const firstMsg = error.response.data.errors[firstKey][0];
+        Alert.alert("Validation Error", `${firstKey}: ${firstMsg}`);
+      } else {
+        Alert.alert("Submission Error", error.message || "Unknown error");
+      }
+    } finally {
+      setSubmitting(false);
     }
-     } catch (error: any) {
-    if (error.response?.data?.errors) {
-      console.error("🚨 Validation Errors:", error.response.data.errors);
-      const firstKey = Object.keys(error.response.data.errors)[0];
-      const firstMsg = error.response.data.errors[firstKey][0];
-      Alert.alert("Validation Error", `${firstKey}: ${firstMsg}`);
-    } else {
-      Alert.alert("Submission Error", error.message || "Unknown error");
-    }
-  } finally {
-    setSubmitting(false);
-  }
-};
+  };
 
   const handleChange = (fieldName: string, value: string) => {
     if (fieldName === "comments") {
@@ -1241,163 +1289,162 @@ const collectMiniCaptureMissing = (): string[] => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* <View style={styles.card}> */}
-          <Text style={styles.sectionTitle}>Basic Information</Text>
+        <Text style={styles.sectionTitle}>Basic Information</Text>
 
-          <Text style={styles.label}>Building Name</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.buildingName}
-            editable={false}
+        <Text style={styles.label}>Building Name</Text>
+        <TextInput
+          style={styles.input}
+          value={basicInfo.buildingName}
+          editable={false}
+        />
+
+        <Text style={styles.label}>Unique Building Reference</Text>
+        <TextInput
+          style={styles.input}
+          value={basicInfo.uniqueRef}
+          editable={false}
+        />
+
+        <Text style={styles.label}>Date</Text>
+        <TextInput
+          style={styles.input}
+          value={basicInfo.date}
+          editable={false}
+        />
+
+        {showPicker && (
+          <DateTimePicker
+            value={date}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={handleDateChange}
+            maximumDate={new Date()}
           />
+        )}
 
-          <Text style={styles.label}>Unique Building Reference</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.uniqueRef}
-            editable={false}
-          />
+        <Text style={styles.label}>Location</Text>
+        <TextInput
+          style={[styles.input, { height: 60 }]}
+          multiline
+          value={basicInfo.location}
+          editable={false}
+        />
 
-          <Text style={styles.label}>Date</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.date}
-            editable={false}
-          />
+        <Text style={styles.label}>Floor*</Text>
+        <TextInput
+          ref={(ref) => {
+            if (ref) mandatoryFieldRef.current.floor = ref;
+          }}
+          // ref={(r) => (mandatoryFieldRef.current.floor = r)}
+          style={[styles.input, errors.floor && styles.errorInput]}
+          value={basicInfo.floor}
+          keyboardType="numeric"
+          onChangeText={(text) =>
+            setBasicInfo((prev) => ({ ...prev, floor: text }))
+          }
+        />
+        {errors.floor && <Text style={styles.errorText}>{errors.floor}</Text>}
 
-          {showPicker && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-            />
-          )}
+        <Text style={styles.label}>Upload Floor Plan*</Text>
+        <Capture
+          onImagesChange={(images) => handleImagesChange(images, "Floor")}
+          reset={resetCaptureFlag}
+          // onImageDelete={(index) => handleDeleteImages(index, "Floor")}
+          onImageDelete={(index) => confirmDeleteImage(index, "Floor")}
+          fieldValue="floorFile"
+          singleImageCapture={true}
+          isView={false}
+          savedImages={basicInfo.floorPlan}
+          mandatoryFieldRef={mandatoryFieldRef}
+          allowGallery={true}
+        />
+        {errors.floorPlan && (
+          <Text style={styles.errorText}>{errors.floorPlan}</Text>
+        )}
 
-          <Text style={styles.label}>Location</Text>
-          <TextInput
-            style={[styles.input, { height: 60 }]}
-            multiline
-            value={basicInfo.location}
-            editable={false}
-          />
+        <Text style={styles.label}>Door Number</Text>
+        <TextInput
+          style={styles.input}
+          value={formData.doorNumber}
+          editable={false}
+        />
 
-          <Text style={styles.label}>Floor*</Text>
-          <TextInput
+        <Text style={styles.label}>Door Type*</Text>
+        <View
+          style={[
+            {
+              borderWidth: 1,
+              borderColor: "#ccc",
+              borderRadius: 6,
+              backgroundColor: "#e9f1fb",
+              overflow: "hidden",
+              height: Platform.OS === "ios" ? 200 : 48,
+              justifyContent: "center",
+              marginTop: 8,
+            },
+            errors.doorType && styles.errorInput, // red border when invalid
+          ]}
+        >
+          <Picker
             ref={(ref) => {
-              if (ref) mandatoryFieldRef.current.floor = ref;
+              if (ref) mandatoryFieldRef.current.doorType = ref;
             }}
-            // ref={(r) => (mandatoryFieldRef.current.floor = r)}
-            style={[styles.input, errors.floor && styles.errorInput]}
-            value={basicInfo.floor}
-            keyboardType="numeric"
-            onChangeText={(text) =>
-              setBasicInfo((prev) => ({ ...prev, floor: text }))
-            }
-          />
-          {errors.floor && <Text style={styles.errorText}>{errors.floor}</Text>}
-
-          <Text style={styles.label}>Upload Floor Plan*</Text>
-          <Capture
-            onImagesChange={(images) => handleImagesChange(images, "Floor")}
-            reset={resetCaptureFlag}
-            // onImageDelete={(index) => handleDeleteImages(index, "Floor")}
-                          onImageDelete={(index) => confirmDeleteImage(index, "Floor")}
-
-            fieldValue="floorFile"
-            singleImageCapture={true}
-            isView={false}
-            savedImages={basicInfo.floorPlan}
-            mandatoryFieldRef={mandatoryFieldRef}
-            allowGallery={true}
-          />
-          {errors.floorPlan && (
-            <Text style={styles.errorText}>{errors.floorPlan}</Text>
-          )}
-
-          <Text style={styles.label}>Door Number</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.doorNumber}
-            editable={false}
-          />
-
-          <Text style={styles.label}>Door Type*</Text>
-          <View
-            style={[
-              {
-                borderWidth: 1,
-                borderColor: "#ccc",
-                borderRadius: 6,
-                backgroundColor: "#e9f1fb",
-                overflow: "hidden",
-                height: Platform.OS === "ios" ? 200 : 48,
-                justifyContent: "center",
-                marginTop: 8,
-              },
-              errors.doorType && styles.errorInput, // red border when invalid
-            ]}
+            selectedValue={formData.doorType}
+            onValueChange={(v) => handleFormDataChange("doorType", v)}
+            dropdownIconColor="#034694"
+            style={{
+              width: "100%",
+              backgroundColor: "#e9f1fb",
+              color: "#034694",
+              fontSize: 16,
+            }}
+            mode="dropdown"
           >
-            <Picker
-              ref={(ref) => {
-                if (ref) mandatoryFieldRef.current.doorType = ref;
-              }}
-              selectedValue={formData.doorType}
-              onValueChange={(v) => handleFormDataChange("doorType", v)}
-              dropdownIconColor="#034694"
-              style={{
-                width: "100%",
-                backgroundColor: "#e9f1fb",
-                color: "#034694",
-                fontSize: 16,
-              }}
-              mode="dropdown"
-            >
-              <Picker.Item label="Select" value="" />
-              {doorOptions.map((opt) => (
-                <Picker.Item
-                  color="#034694"
-                  key={opt.doorTypeId}
-                  label={opt.doorTypeName}
-                  value={opt.doorTypeId}
-                />
-              ))}
-            </Picker>
-          </View>
-          {errors.doorType && (
-            <Text style={styles.errorText}>{errors.doorType}</Text>
-          )}
-
-          {doorOtherFlag && (
-            <>
-                      {/* {errors.doorOther && <Text style={styles.errorText}>{errors.doorOther}</Text>} */}
-
-              <Text style={styles.label}>Other Door Type*</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.doorOther}
-                onChangeText={(t) =>
-                  setFormData((prev) => ({ ...prev, doorOther: t }))
-                }
+            <Picker.Item label="Select" value="" />
+            {doorOptions.map((opt) => (
+              <Picker.Item
+                color="#034694"
+                key={opt.doorTypeId}
+                label={opt.doorTypeName}
+                value={opt.doorTypeId}
               />
-            </>
-          )}
+            ))}
+          </Picker>
+        </View>
+        {errors.doorType && (
+          <Text style={styles.errorText}>{errors.doorType}</Text>
+        )}
 
-          <Text style={styles.label}>Upload Door Photo*</Text>
-          <Capture
-            onImagesChange={(images) => handleImagesChange(images, "Door")}
-            reset={resetCaptureFlag}
-            onImageDelete={(index) => confirmDeleteImage(index, "Door")}
-            fieldValue="doorFile"
-            singleImageCapture
-            isView={false}
-            savedImages={formData.doorPhoto}
-            mandatoryFieldRef={mandatoryFieldRef}
-            allowGallery={true} // ✅ add this to let Capture also open gallery
-          />
-           {errors.doorPhoto && (
-            <Text style={styles.errorText}>{errors.doorPhoto}</Text>
-          )}
+        {doorOtherFlag && (
+          <>
+            {/* {errors.doorOther && <Text style={styles.errorText}>{errors.doorOther}</Text>} */}
+
+            <Text style={styles.label}>Other Door Type*</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.doorOther}
+              onChangeText={(t) =>
+                setFormData((prev) => ({ ...prev, doorOther: t }))
+              }
+            />
+          </>
+        )}
+
+        <Text style={styles.label}>Upload Door Photo*</Text>
+        <Capture
+          onImagesChange={(images) => handleImagesChange(images, "Door")}
+          reset={resetCaptureFlag}
+          onImageDelete={(index) => confirmDeleteImage(index, "Door")}
+          fieldValue="doorFile"
+          singleImageCapture
+          isView={false}
+          savedImages={formData.doorPhoto}
+          mandatoryFieldRef={mandatoryFieldRef}
+          allowGallery={true} // ✅ add this to let Capture also open gallery
+        />
+        {errors.doorPhoto && (
+          <Text style={styles.errorText}>{errors.doorPhoto}</Text>
+        )}
         {/* </View> */}
 
         {/* QR CODE SECTION */}
@@ -1652,8 +1699,7 @@ const collectMiniCaptureMissing = (): string[] => {
             let showFireLockedSign =
               complianceCheck["selfClosingDevice"] === false; // rule 1
 
-let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
-
+            let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
 
             const items: {
               key: ComplianceKey;
@@ -1859,6 +1905,34 @@ let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
             Back
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleReset}
+          style={[
+            styles.button,
+            {
+              backgroundColor: "#ffffff",
+              paddingVertical: 14,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+              elevation: 2,
+              borderWidth: 1,
+              borderColor: "#000000",
+              flex: 1, // equal space
+              marginLeft: 8, // gap between buttons
+            },
+          ]}
+        >
+          <Text style={{ color: "#721c24", fontSize: 16, fontWeight: "600" }}>
+            Reset
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[
             styles.button,
@@ -1903,13 +1977,13 @@ let showPyroGlazing = complianceCheck["doorGlazing"] === true; // ✅ new
         </View>
       ) : null}
 
-<ConfirmationPopup
+      <ConfirmationPopup
         visible={confirm.visible}
         title="Delete image?"
         message="This will remove the photo from this record."
         cancelText="cancel"
         confirmText="Delete"
-          onCancel={keepImage}     
+        onCancel={keepImage}
         onConfirm={confirmDelete}
       />
       <Footer />
