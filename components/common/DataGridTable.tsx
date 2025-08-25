@@ -530,7 +530,7 @@ export default function DataGridTable({
       </ScrollView>
 
       {/* Pagination controls */}
-      {pageSize !== -1 && (
+      {/* {pageSize !== -1 && (
         <View style={styles.paginationBar}>
           <TouchableOpacity
             onPress={() => setPage((p) => Math.max(0, p - 1))}
@@ -560,7 +560,7 @@ export default function DataGridTable({
             <Text style={styles.pageBtnText}>Next</Text>
           </TouchableOpacity>
         </View>
-      )}
+      )} */}
     </View>
   );
 }
